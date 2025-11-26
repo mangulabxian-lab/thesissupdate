@@ -6,10 +6,6 @@ import api, {
   deleteAllQuizzes, 
   deleteQuiz, 
   getQuizForStudent, 
-  updateAnnouncement, 
-  deleteAnnouncement, 
-  addCommentToAnnouncement, 
-  deleteCommentFromAnnouncement,
    joinExamSession
 } from "../lib/api";
 import "./Dashboard.css";
@@ -2873,14 +2869,14 @@ const renderPeopleTab = () => {
           onClick={() => navigate(`/teacher-exam/${item._id}`)}
           title="Manage active session"
         >
-          🔴 Live Session Active
+          START
         </button>
         <button 
           className="end-session-btn"
           onClick={() => handleEndExamSession(item._id)}
           title="End exam session"
         >
-          ⏹️ End Session
+          END
         </button>
       </div>
     )}
@@ -2891,7 +2887,7 @@ const renderPeopleTab = () => {
       disabled={deletingQuiz === item._id}
       title="Delete this quiz"
     >
-      {deletingQuiz === item._id ? '🗑️ Deleting...' : '🗑️'}
+      {deletingQuiz === item._id ? ' Deleting...' : ''} DELETE
     </button>
   </div>
 )}

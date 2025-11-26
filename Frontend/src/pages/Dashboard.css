@@ -4901,6 +4901,8 @@ a:focus {
   border-radius: 8px;
   padding: 20px;
   transition: box-shadow 0.2s;
+  width: 1000px;
+  height: auto;
 }
 
 .classwork-card:hover {
@@ -5586,11 +5588,11 @@ a:focus {
 
 .start-session-btn, .view-session-btn {
   background: #dc2626;
-  color: white;
+  color: black;
   border: none;
   padding: 8px 12px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 2px;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -5670,7 +5672,7 @@ a:focus {
 .active-session-controls {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: right;
 }
 
 .view-session-btn {

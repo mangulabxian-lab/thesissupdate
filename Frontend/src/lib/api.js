@@ -356,8 +356,13 @@ export const startExamSession = async (examId) => {
 };
 
 export const endExamSession = async (examId) => {
-  const response = await api.post(`/exams/${examId}/end`);
-  return response.data;
+  try {
+    const response = await api.post(`/exams/${examId}/end-session`);
+    return response.data;
+  } catch (error) {
+    console.error('Error ending exam session:', error);
+    throw error;
+  }
 };
 
 export const getExamSession = async (examId) => {

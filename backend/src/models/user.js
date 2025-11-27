@@ -60,6 +60,12 @@ const UserSchema = new mongoose.Schema({
     }
   },
 
+  // ✅ ADD PROFILE IMAGE FIELD
+  profileImage: {
+    type: String,
+    default: ""
+  },
+
   createdClasses: [{ type: mongoose.Schema.Types.ObjectId, ref: "Class" }],
   joinedClasses: [{ type: mongoose.Schema.Types.ObjectId, ref: "Class" }],
   isVerified: { type: Boolean, default: false },

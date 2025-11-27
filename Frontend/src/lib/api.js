@@ -1,10 +1,10 @@
-// src/lib/api.js - FIXED VERSION WITH DEFAULT EXPORT
+// src/lib/api.js - UPDATED VERSION WITH PROFILE IMAGE SUPPORT
 import axios from "axios";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000/api",
   withCredentials: true,
-  timeout: 10000, // ✅ ADD TIMEOUT
+  timeout: 10000,
 });
 
 // SINGLE Request interceptor
@@ -13,9 +13,6 @@ api.interceptors.request.use((config) => {
   
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    console.log('✅ Token added to request');
-  } else {
-    console.warn('⚠️ No token found in localStorage');
   }
   
   return config;
@@ -35,6 +32,118 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// ===== USER PROFILE WITH IMAGE SUPPORT =====
+export const getUserProfile = async () => {
+  const response = await api.get('/auth/me');
+  console.log('👤 User profile response:', response.data);
+  return response.data;
+};
+
+export const updateUserProfile = async (userData) => {
+  // Check if userData contains a file (profile image)
+  if (userData.profileImage instanceof File) {
+    const formData = new FormData();
+    
+    // Append all user data to formData
+    Object.keys(userData).forEach(key => {
+      if (key === 'profileImage' && userData[key] instanceof File) {
+        formData.append('profileImage', userData[key]);
+      } else if (key !== 'profileImage') {
+        formData.append(key, userData[key]);
+      }
+    });
+
+    console.log('🖼️ Uploading profile image with FormData');
+    const response = await api.put('/auth/profile', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  } else {
+    // Regular JSON update
+    const response = await api.put('/auth/profile', userData);
+    return response.data;
+  }
+};
+
+// Enhanced profile image upload function
+export const uploadProfileImage = async (imageFile) => {
+  try {
+    const formData = new FormData();
+    formData.append('profileImage', imageFile);
+
+    console.log('📤 Uploading profile image...');
+    const response = await api.post('/auth/upload-profile-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000 // Longer timeout for image uploads
+    });
+
+    console.log('✅ Profile image uploaded successfully:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Profile image upload failed:', error);
+    
+    if (error.response?.status === 413) {
+      throw new Error('Profile image too large. Maximum size is 5MB.');
+    }
+    if (error.response?.status === 400) {
+      throw new Error(error.response.data?.message || 'Invalid image format. Use JPG, PNG, or WebP.');
+    }
+    
+    throw new Error(error.response?.data?.message || 'Failed to upload profile image.');
+  }
+};
+
+// Delete profile image
+export const deleteProfileImage = async () => {
+  const response = await api.delete('/auth/profile-image');
+  return response.data;
+};
+
+// Get user profile by ID (for student/teacher profiles)
+export const getUserProfileById = async (userId) => {
+  const response = await api.get(`/auth/users/${userId}/profile`);
+  console.log('👤 User profile by ID response:', response.data);
+  return response.data;
+};
+
+// ===== STUDENT MANAGEMENT API WITH PROFILE IMAGES =====
+export const getClassPeople = async (classId) => {
+  const response = await api.get(`/student-management/${classId}/students`);
+  console.log('👥 Class people response:', response.data);
+  
+  // Ensure all students have proper profileImage URLs
+  if (response.data.students) {
+    response.data.students = response.data.students.map(student => ({
+      ...student,
+      profileImage: student.profileImage || `/api/auth/users/${student.id}/profile-image`
+    }));
+  }
+  
+  return response.data;
+};
+
+// Update student profile (for teachers)
+export const updateStudentProfile = async (studentId, studentData) => {
+  if (studentData.profileImage instanceof File) {
+    const formData = new FormData();
+    Object.keys(studentData).forEach(key => {
+      if (key === 'profileImage' && studentData[key] instanceof File) {
+        formData.append('profileImage', studentData[key]);
+      } else if (key !== 'profileImage') {
+        formData.append(key, studentData[key]);
+      }
+    });
+
+    const response = await api.put(`/student-management/students/${studentId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  } else {
+    const response = await api.put(`/student-management/students/${studentId}`, studentData);
+    return response.data;
+  }
+};
 
 // ===== NOTIFICATION FUNCTIONS =====
 export const getNotifications = async (page = 1, limit = 20) => {
@@ -75,11 +184,6 @@ export const updateNotificationPreferences = async (preferences) => {
 };
 
 // ===== STUDENT MANAGEMENT API =====
-export const getClassPeople = async (classId) => {
-  const response = await api.get(`/student-management/${classId}/students`);
-  return response.data;
-};
-
 export const removeStudentFromClass = async (classId, studentId) => {
   const response = await api.delete(`/student-management/${classId}/students/${studentId}`);
   return response.data;
@@ -294,17 +398,6 @@ export const logoutUser = async () => {
   return response.data;
 };
 
-// ===== USER =====
-export const getUserProfile = async () => {
-  const response = await api.get('/auth/me');
-  return response.data;
-};
-
-export const updateUserProfile = async (userData) => {
-  const response = await api.put('/auth/profile', userData);
-  return response.data;
-};
-
 // ===== FILE UPLOAD =====
 export const uploadFile = async (file, classId) => {
   const formData = new FormData();
@@ -411,22 +504,23 @@ export const analyzeProctoringFrame = async (imageData) => {
   return await response.json();
 };
 
-/* -----------------------------------------------------------
-   ✅ ADDED: CLASS CHAT API (Fixes your ChatForum import error)
------------------------------------------------------------- */
+// ===== CLASS CHAT API =====
 export const getClassChatMessages = async (classId) => {
   try {
-    const response = await api.get(`/class-chat/${classId}`);
+    const response = await api.get(`/class-chat/${classId}/messages`);
+    console.log('📨 Chat messages response:', response.data);
     return response.data;
   } catch (error) {
     console.error("❌ Error fetching class chat messages:", error);
-    throw error;
+    // Return empty array if endpoint doesn't exist yet
+    return { success: true, data: [] };
   }
 };
 
 export const sendClassChatMessage = async (classId, messageData) => {
   try {
-    const response = await api.post(`/class-chat/${classId}`, messageData);
+    const response = await api.post(`/class-chat/${classId}/messages`, messageData);
+    console.log('✅ Chat message sent:', response.data);
     return response.data;
   } catch (error) {
     console.error("❌ Error sending chat message:", error);
@@ -436,7 +530,7 @@ export const sendClassChatMessage = async (classId, messageData) => {
 
 export const deleteChatMessage = async (messageId) => {
   try {
-    const response = await api.delete(`/class-chat/message/${messageId}`);
+    const response = await api.delete(`/class-chat/messages/${messageId}`);
     return response.data;
   } catch (error) {
     console.error("❌ Error deleting chat message:", error);

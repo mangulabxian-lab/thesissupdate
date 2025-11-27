@@ -1,4 +1,4 @@
-// src/components/Dashboard.jsx - UPDATED WITH DIRECT QUIZ CREATION
+// src/components/Dashboard.jsx - UPDATED WITH PROFILE IMAGE FIXES
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEllipsisV, FaChevronDown, FaEnvelope, FaUserMinus, FaVolumeMute, FaVolumeUp, FaSave, FaTimes } from "react-icons/fa";
@@ -23,7 +23,7 @@ export default function Dashboard() {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [activeSidebar, setActiveSidebar] = useState("home");
-  const [activeTab, setActiveTab] = useState("stream");
+  const [activeTab, setActiveTab] = useState("classwork");
 
   // ===== MODAL STATES =====
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -37,7 +37,6 @@ export default function Dashboard() {
     name: "",
     email: "",
     profilePicture: "",
-    // ✅ NOTIFICATION SETTINGS REMOVED
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -143,7 +142,6 @@ export default function Dashboard() {
       name: user.name,
       email: user.email,
       profilePicture: user.profileImage || '',
-      // ✅ NOTIFICATION SETTINGS REMOVED
     });
     setShowSettingsModal(true);
   };
@@ -151,7 +149,6 @@ export default function Dashboard() {
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     try {
-      // Update user profile
       const response = await api.put("/auth/profile", {
         name: settingsData.name,
         email: settingsData.email,
@@ -183,7 +180,6 @@ export default function Dashboard() {
   const handleProfilePictureUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
-      // Create a temporary URL for the uploaded image
       const imageUrl = URL.createObjectURL(file);
       setSettingsData(prev => ({
         ...prev,
@@ -198,35 +194,38 @@ export default function Dashboard() {
     
     setLoadingPeople(true);
     try {
-      // ✅ FIXED: Use the correct class members API endpoint
-      const response = await api.get(`/class/${selectedClass._id}/members`);
+      // ✅ FIXED: Use the correct student management API endpoint
+      const response = await api.get(`/student-management/${selectedClass._id}/students`);
       
       console.log('👥 Class members API response:', response.data);
       
       if (response.data.success) {
-        // ✅ Transform the data to match your PeopleTab component structure
-        const members = response.data.data || [];
-        
-        // Separate teachers and students
-        const teachers = members.filter(member => member.role === "teacher");
-        const students = members.filter(member => member.role === "student");
-        
-        setClassPeople({
-          teachers: teachers,
-          students: students
-        });
+        setClassPeople(response.data.data);
         
         console.log('✅ People data loaded:', { 
-          teachers: teachers.length, 
-          students: students.length 
+          teachers: response.data.data.teachers?.length || 0, 
+          students: response.data.data.students?.length || 0,
+          teachersWithProfiles: response.data.data.teachers?.filter(t => t.profileImage).length || 0,
+          studentsWithProfiles: response.data.data.students?.filter(s => s.profileImage).length || 0
         });
       } else {
         console.error('Failed to fetch people data:', response.data.message);
-        setClassPeople({ teachers: [], students: [] });
+        // Fallback: Try to get members from class API
+        try {
+          const classResponse = await api.get(`/class/${selectedClass._id}/members`);
+          if (classResponse.data.success) {
+            const members = classResponse.data.data || [];
+            const teachers = members.filter(member => member.role === "teacher");
+            const students = members.filter(member => member.role === "student");
+            setClassPeople({ teachers, students });
+          }
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+          setClassPeople({ teachers: [], students: [] });
+        }
       }
     } catch (err) {
       console.error('Error fetching people data:', err);
-      // Fallback to empty data
       setClassPeople({ teachers: [], students: [] });
     } finally {
       setLoadingPeople(false);
@@ -239,14 +238,11 @@ export default function Dashboard() {
     }
 
     try {
-      // ✅ FIXED: Use the correct API endpoint for unenrolling students
-      const response = await api.delete(`/class/${selectedClass._id}/unenroll`, {
-        data: { studentId }
-      });
+      const response = await api.delete(`/student-management/${selectedClass._id}/students/${studentId}`);
 
       if (response.data.success) {
         alert('Student removed successfully');
-        fetchClassPeople(); // Refresh data
+        fetchClassPeople();
       } else {
         alert('Failed to remove student: ' + response.data.message);
       }
@@ -258,12 +254,11 @@ export default function Dashboard() {
 
   const handleToggleMute = async (studentId, studentName, isCurrentlyMuted) => {
     try {
-      // Note: You'll need to implement this endpoint in your backend
       const response = await api.patch(`/student-management/${selectedClass._id}/students/${studentId}/mute`);
 
       if (response.data.success) {
         alert(`Student ${isCurrentlyMuted ? 'unmuted' : 'muted'} successfully`);
-        fetchClassPeople(); // Refresh data
+        fetchClassPeople();
       } else {
         alert('Failed to update student: ' + response.data.message);
       }
@@ -273,7 +268,6 @@ export default function Dashboard() {
     }
   };
 
-  // FIXED: Toggle actions with proper event handling
   const toggleActions = useCallback((personId, event) => {
     if (event) {
       event.stopPropagation();
@@ -305,7 +299,6 @@ export default function Dashboard() {
     }
 
     try {
-      // Note: You'll need to implement this endpoint in your backend
       const response = await api.post(`/student-management/${selectedClass._id}/email-students`, {
         studentIds: selectedStudents,
         subject: emailData.subject,
@@ -578,7 +571,6 @@ export default function Dashboard() {
     try {
       const response = await api.get('/exams/student/completed');
       if (response.data.success) {
-        // Filter completed exams for current class only
         const classCompletedExams = response.data.data.filter(exam => 
           exam.classId === selectedClass._id
         );
@@ -599,11 +591,8 @@ export default function Dashboard() {
       console.log("🔄 Handling redirect state:", location.state);
       
       if (examCompleted) {
-        // Refresh classwork to hide the completed exam
         fetchClasswork();
-        // Refresh completed exams
         fetchCompletedExams();
-        // Optionally show a success message
         alert('✅ Quiz completed successfully! It has been moved to your completed work.');
       }
       
@@ -633,6 +622,25 @@ export default function Dashboard() {
       window.history.replaceState({}, document.title);
     }
   }, [location.state, classes]);
+
+  // ✅ ADDED: New useEffect to handle navigation state specifically for quiz deployment
+  useEffect(() => {
+    const handleNavigationState = async () => {
+      if (location.state?.refresh && location.state?.activeTab === 'classwork' && selectedClass) {
+        console.log("🔄 Refreshing classwork after quiz deployment");
+        
+        await fetchClasswork();
+        
+        if (location.state.showSuccess) {
+          alert(location.state.message || 'Quiz deployed successfully!');
+        }
+        
+        window.history.replaceState({}, document.title);
+      }
+    };
+    
+    handleNavigationState();
+  }, [location.state, selectedClass]);
 
   // ===== ANNOUNCEMENT FUNCTIONS =====
   const handleDeleteAnnouncement = async (announcementId) => {
@@ -731,12 +739,10 @@ export default function Dashboard() {
         setShowCommentMenu(null);
       }
 
-      // FIXED: Add click outside handler for actions dropdown
       if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(event.target)) {
         setActiveActions(null);
       }
 
-      // Settings modal click outside handler
       if (settingsModalRef.current && !settingsModalRef.current.contains(event.target)) {
         setShowSettingsModal(false);
       }
@@ -860,53 +866,52 @@ export default function Dashboard() {
     fetchData();
   }, [navigate]);
 
-  // Effect para i-fetch ang review count kapag nagbago ang userRole
   useEffect(() => {
     if (userRole) {
       fetchReviewCount();
     }
   }, [userRole]);
 
-  // Effect para i-fetch ang announcements kapag nagbago ang selected class o active tab
   useEffect(() => {
     if (selectedClass && activeTab === 'stream') {
       fetchAnnouncements();
     }
   }, [selectedClass, activeTab]);
 
-  // Effect para i-fetch ang classwork kapag nagbago ang selected class o active tab
   useEffect(() => {
     if (selectedClass && activeTab === 'classwork') {
       fetchClasswork();
     }
   }, [selectedClass, activeTab]);
 
-  // Effect para i-fetch ang people data kapag nagbago ang selected class o active tab
+  // ✅ UPDATED: Enhanced effect for people data fetching
   useEffect(() => {
-    if (selectedClass && activeTab === 'people') {
+    if (selectedClass && (activeTab === 'people' || activeTab === 'chat')) {
+      console.log('🔄 Fetching people data for class:', selectedClass._id, 'Active tab:', activeTab);
       fetchClassPeople();
     }
   }, [selectedClass, activeTab]);
 
-  // Effect para i-generate ang calendar events kapag nagbago ang classes
   useEffect(() => {
     generateCalendarEvents();
   }, [classes]);
 
-  // Effect para i-fetch ang completed exams kapag nagbago ang selected class
   useEffect(() => {
     if (selectedClass && selectedClass.userRole === 'student') {
       fetchCompletedExams();
     }
   }, [selectedClass]);
 
-  // Function para kunin ang classwork
+  // Function para kunin ang classwork - UPDATED
   const fetchClasswork = async () => {
     if (!selectedClass) return;
     
     try {
+      console.log("📚 Fetching classwork for class:", selectedClass._id);
       const classworkRes = await api.get(`/classwork/${selectedClass._id}`);
-      setClasswork(classworkRes.data?.data || classworkRes.data || []);
+      const classworkData = classworkRes.data?.data || classworkRes.data || [];
+      console.log("✅ Classwork loaded:", classworkData.length, "items");
+      setClasswork(classworkData);
     } catch (error) {
       console.log("Classwork endpoint not available yet, using mock data");
       setClasswork([
@@ -1199,7 +1204,7 @@ export default function Dashboard() {
   const handleSelectClass = async (classData) => {
     console.log("🎯 Selecting class:", classData.name);
     setSelectedClass(classData);
-    setActiveTab("stream");
+    setActiveTab("classwork");
     
     try {
       const examsRes = await api.get(`/exams/${classData._id}`);
@@ -1226,25 +1231,35 @@ export default function Dashboard() {
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
- // ===== CHAT TAB RENDERER =====
-const renderChatTab = () => {
-  if (!selectedClass) return null;
-  
-  return (
-    <div className="chat-tab">
-      <ChatForum 
-        classId={selectedClass._id} 
-        currentUser={{
-          id: user._id,
-          role: selectedClass.userRole,
-          name: user.name,
-          email: user.email,
-          profileImage: user.profileImage // ✅ ADD THIS LINE
-        }}
-      />
-    </div>
-  );
-};
+  // ===== CHAT TAB RENDERER - UPDATED =====
+  const renderChatTab = () => {
+    if (!selectedClass) return null;
+    
+    console.log('💬 Rendering Chat Tab with classPeople:', {
+      teachers: classPeople.teachers?.length || 0,
+      students: classPeople.students?.length || 0,
+      totalMembers: (classPeople.teachers?.length || 0) + (classPeople.students?.length || 0),
+      teachersWithProfiles: classPeople.teachers?.filter(t => t.profileImage).length || 0,
+      studentsWithProfiles: classPeople.students?.filter(s => s.profileImage).length || 0
+    });
+    
+    return (
+      <div className="chat-tab">
+        <ChatForum 
+          classId={selectedClass._id} 
+          currentUser={{
+            id: user._id,
+            role: selectedClass.userRole,
+            name: user.name,
+            email: user.email,
+            profileImage: user.profileImage
+          }}
+          // ✅ CRITICAL: Pass class members data to ChatForum
+          classMembers={classPeople}
+        />
+      </div>
+    );
+  };
 
   // ===== COMPLETED EXAMS RENDERER =====
   const renderCompletedExams = () => {
@@ -1283,7 +1298,6 @@ const renderChatTab = () => {
               
               <div className="exam-actions">
                 <button className="review-btn" onClick={() => {
-                  // Navigate to review page if you have one
                   navigate(`/review-exam/${exam._id}`);
                 }}>
                   Review Answers
@@ -1370,8 +1384,6 @@ const renderChatTab = () => {
                 </div>
               </div>
             </div>
-
-            {/* ✅ NOTIFICATION SETTINGS SECTION REMOVED */}
 
             {/* Account Settings */}
             <div className="mb-8">
@@ -1955,11 +1967,18 @@ const renderPeopleTab = () => {
     return <div className="loading">Loading people...</div>;
   }
 
+  console.log('👥 Rendering People Tab with data:', {
+    teachers: classPeople.teachers?.length || 0,
+    students: classPeople.students?.length || 0,
+    teachersWithProfiles: classPeople.teachers?.filter(t => t.profileImage).length || 0,
+    studentsWithProfiles: classPeople.students?.filter(s => s.profileImage).length || 0
+  });
+
   return (
     <div className="people-tab">
       <div className="people-header">
         <h3>People</h3>
-        {isTeacher && classPeople.students.length > 0 && (
+        {isTeacher && classPeople.students && classPeople.students.length > 0 && (
           <button 
             className="email-students-btn"
             onClick={() => setShowEmailModal(true)}
@@ -1972,45 +1991,50 @@ const renderPeopleTab = () => {
 
       {/* Teachers Section */}
       <div className="people-section">
-        <h4 className="section-title">Teachers</h4>
+        <h4 className="section-title">Teachers ({classPeople.teachers?.length || 0})</h4>
         <div className="people-list">
-          {classPeople.teachers.map(teacher => (
-            <div key={teacher._id} className="person-card teacher-card">
-              <div className="person-avatar">
-                {teacher.profileImage ? (
-                  <img 
-                    src={teacher.profileImage} 
-                    alt={teacher.name}
-                    className="avatar-image"
-                    onError={(e) => {
-                      // Fallback to initials if image fails to load
-                      e.target.style.display = 'none';
-                      const fallback = e.target.nextSibling;
-                      if (fallback) fallback.style.display = 'flex';
-                    }}
-                  />
-                ) : null}
-                <div className={`avatar-fallback ${teacher.profileImage ? 'hidden' : ''}`}>
-                  {teacher.name.charAt(0).toUpperCase()}
+          {classPeople.teachers && classPeople.teachers.length > 0 ? (
+            classPeople.teachers.map(teacher => (
+              <div key={teacher._id} className="person-card teacher-card">
+                <div className="person-avatar">
+                  {teacher.profileImage ? (
+                    <img 
+                      src={teacher.profileImage} 
+                      alt={teacher.name}
+                      className="avatar-image"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        const fallback = e.target.nextSibling;
+                        if (fallback) fallback.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div className={`avatar-fallback ${teacher.profileImage ? 'hidden' : ''}`}>
+                    {teacher.name?.charAt(0)?.toUpperCase() || 'T'}
+                  </div>
+                </div>
+                <div className="person-info">
+                  <div className="person-name">{teacher.name}</div>
+                  <div className="person-email">{teacher.email}</div>
+                  <div className="person-role teacher-role">Teacher</div>
                 </div>
               </div>
-              <div className="person-info">
-                <div className="person-name">{teacher.name}</div>
-                <div className="person-email">{teacher.email}</div>
-                <div className="person-role teacher-role">Teacher</div>
-              </div>
+            ))
+          ) : (
+            <div className="no-teachers">
+              <p>No teachers found</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
       {/* Students Section */}
       <div className="people-section">
         <div className="section-header">
-          <h4 className="section-title">Students ({classPeople.students.length})</h4>
+          <h4 className="section-title">Students ({classPeople.students?.length || 0})</h4>
         </div>
 
-        {classPeople.students.length > 0 ? (
+        {classPeople.students && classPeople.students.length > 0 ? (
           <div className="students-container">
             {/* Bulk Selection Header */}
             {isTeacher && (
@@ -2049,7 +2073,6 @@ const renderPeopleTab = () => {
                         alt={student.name}
                         className="avatar-image"
                         onError={(e) => {
-                          // Fallback to initials if image fails to load
                           e.target.style.display = 'none';
                           const fallback = e.target.nextSibling;
                           if (fallback) fallback.style.display = 'flex';
@@ -2057,7 +2080,7 @@ const renderPeopleTab = () => {
                       />
                     ) : null}
                     <div className={`avatar-fallback ${student.profileImage ? 'hidden' : ''}`}>
-                      {student.name.charAt(0).toUpperCase()}
+                      {student.name?.charAt(0)?.toUpperCase() || 'S'}
                     </div>
                   </div>
                   <div className="person-info">
@@ -2675,89 +2698,14 @@ const renderPeopleTab = () => {
     }
   };
 
-  // Stream content na may working announcements
-  const renderStreamContent = () => {
-    return (
-      <div className="stream-content">
-        {isTeacher && (
-          <div className="stream-actions">
-            <button 
-              className="new-announcement-btn"
-              onClick={() => setShowAnnouncementModal(true)}
-            >
-              <span className="btn-icon">
-                <i className="material-icons">campaign</i>
-              </span>
-              New announcement
-            </button>
-            <button className="repost-btn">
-              <span className="btn-icon">
-                <i className="material-icons">repeat</i>
-              </span>
-              Repost
-            </button>
-          </div>
-        )}
-
-        {loadingAnnouncements && (
-          <div className="announcements-loading">
-            <div className="loading-spinner"></div>
-            <p>Loading announcements...</p>
-          </div>
-        )}
-
-        {!loadingAnnouncements && announcements.length > 0 ? (
-          <div className="announcements-list">
-            {announcements.map((announcement) => (
-              <AnnouncementCard 
-                key={announcement._id} 
-                announcement={announcement} 
-              />
-            ))}
-          </div>
-        ) : !loadingAnnouncements && (
-          <div className="stream-empty-state">
-            <div className="empty-illustration">
-              <svg viewBox="0 0 241 149" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M138.19 145.143L136.835 145.664C134.646 146.498 132.249 145.352 131.519 143.164L82.4271 8.37444C81.5933 6.18697 82.7398 3.79117 84.9286 3.06201L86.2836 2.54118C88.4724 1.70786 90.8697 2.85368 91.5993 5.04115L140.691 139.831C141.421 142.018 140.379 144.414 138.19 145.143Z" stroke="#5F6368" strokeWidth="2"></path>
-                <path d="M76.6602 10.5686C78.2029 12.2516 83.3923 14.7762 88.4414 13.0932C98.5395 9.72709 96.8565 2.57422 96.8565 2.57422" stroke="#5F6368" strokeWidth="2" strokeLinecap="round"></path>
-              </svg>
-            </div>
-            <div className="empty-content">
-              <p className="empty-title">Class announcements</p>
-              <p className="empty-description">
-                {isTeacher 
-                  ? "Use announcements to post updates, reminders, and more to your class." 
-                  : "Announcements from your teacher will appear here."}
-              </p>
-              <div className="empty-actions">
-                {isTeacher && (
-                  <button 
-                    className="stream-settings-btn"
-                    onClick={() => setShowAnnouncementModal(true)}
-                  >
-                    
-                    Create announcement
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // Classwork Tab na may START QUIZ BUTTON FOR STUDENTS
   const renderClassworkTab = () => {
-    // ✅ ADDED: Filter classwork to hide completed exams for students
     const filteredClasswork = classwork.filter(item => {
       if (selectedClass?.userRole === "student" && item.type === 'quiz') {
-        // Check if this student has completed this exam
         const hasCompleted = item.completedBy?.some(completion => 
           completion.studentId === user._id
         );
-        return !hasCompleted; // ✅ HIDE COMPLETED EXAMS
+        return !hasCompleted;
       }
       return true;
     });
@@ -2766,7 +2714,6 @@ const renderPeopleTab = () => {
       <div className="classwork-tab">
         <div className="classwork-header-section">
           <div className="classwork-header">
-            {/* ✅ SIMPLIFIED: Direct Create Quiz/Exam Button */}
             {selectedClass?.userRole === "teacher" && (
               <div className="create-btn-container">
                 <button 
@@ -2809,7 +2756,7 @@ const renderPeopleTab = () => {
         </div>
 
         <div className="classwork-content">
-          {filteredClasswork.length === 0 ? ( // ✅ CHANGED: Use filteredClasswork instead of classwork
+          {filteredClasswork.length === 0 ? (
             <div className="classwork-empty-state">
               <div className="empty-illustration">
                 
@@ -2825,7 +2772,7 @@ const renderPeopleTab = () => {
             </div>
           ) : (
             <div className="classwork-grid">
-              {filteredClasswork.map((item) => ( // ✅ CHANGED: Use filteredClasswork instead of classwork
+              {filteredClasswork.map((item) => (
                 <div className="classwork-card" key={item._id}>
                   <div className="classwork-header">
                     <span className="classwork-icon">
@@ -3000,7 +2947,6 @@ const renderPeopleTab = () => {
             </div>
           )}
 
-          {/* ✅ ADDED: Render completed exams section for students */}
           {renderCompletedExams()}
         </div>
       </div>
@@ -3028,9 +2974,7 @@ const renderPeopleTab = () => {
             </div>
           </div>
 
-          {/* UPDATED TAB NAVIGATION - REMOVED STREAM, PEOPLE, GRADE TABS FOR STUDENT */}
           <div className="classroom-tabs">
-            {/* Teacher View - Removed Stream tab */}
             {selectedClass?.userRole === "teacher" && (
               <>
                 <button 
@@ -3060,7 +3004,6 @@ const renderPeopleTab = () => {
               </>
             )}
             
-            {/* Student View - Removed Stream, People, Grade tabs */}
             {selectedClass?.userRole === "student" && (
               <>
                 <button 
@@ -3079,66 +3022,6 @@ const renderPeopleTab = () => {
             )}
           </div>
 
-          {activeTab === "stream" && (
-            <div className="stream-tab">
-              <div >
-                <div >
-                </div>
-                <div className="class-title-section">
-                  <h1 className="class-main-title">{selectedClass.name}</h1>
-                  <div className="class-subtitle">{selectedClass.description || "Class"}</div>
-                </div>
-                <div className="class-actions">
-                
-                </div>
-              </div>
-
-              <div className="stream-layout">
-                <aside className="stream-sidebar">
-                  <div className="sidebar-section">
-                    <div className="sidebar-header">
-                      <h3>Class code</h3>
-                      <div className="sidebar-actions">
-                        <button className="more-options-btn" aria-label="More options for class code">
-                          <svg className="more-icon" focusable="false" width="24" height="24" viewBox="0 0 24 24">
-                            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="class-code-display">
-                      <div className="class-code-text">{selectedClass.code}</div>
-                      <button className="display-btn" aria-label="Display class code">
-                        <svg className="display-icon" focusable="false" width="24" height="24" viewBox="0 0 24 24">
-                          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"></path>
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="sidebar-section">
-                    <div className="sidebar-header">
-                      <h3>Upcoming</h3>
-                    </div>
-                    <div className="upcoming-content">
-                      <span className="upcoming-text">No work due soon</span>
-                      <span className="upcoming-subtext">Woohoo, no work due soon!</span>
-                      <div className="upcoming-actions">
-                        <button className="view-all-btn">
-                          View all
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </aside>
-
-                <main className="stream-main">
-                  {renderStreamContent()}
-                </main>
-              </div>
-            </div>
-          )}
-
           {activeTab === "classwork" && renderClassworkTab()}
 
           {activeTab === "people" && renderPeopleTab()}
@@ -3147,6 +3030,10 @@ const renderPeopleTab = () => {
 
           {activeTab === "grades" && (
             <div className="grades-tab">
+              <div className="grades-empty">
+                <h3>Grades</h3>
+                <p>Grade tracking feature coming soon...</p>
+              </div>
             </div>
           )}
         </div>
@@ -3253,7 +3140,7 @@ const renderPeopleTab = () => {
     </div>
   );
 
-  // Settings content renderer - UPDATED WITH WORKING MANAGE BUTTON
+  // Settings content renderer
   const renderSettingsContent = () => (
     <div className="settings-view">
       <div className="settings-header">
@@ -3276,8 +3163,6 @@ const renderPeopleTab = () => {
               Manage
             </button>
           </div>
-          
-          {/* ✅ NOTIFICATION PREFERENCES ITEM REMOVED */}
           
           <div className="settings-item">
             <div className="settings-item-content">
@@ -3344,8 +3229,6 @@ const renderPeopleTab = () => {
         </div>
 
         <div className="header-right">
-          {/* ✅ NOTIFICATION BELL COMPONENT REMOVED */}
-          
           {/* CREATE/JOIN DROPDOWN */}
           <div className="plus-btn-container" ref={createJoinDropdownRef}>
             <button 
@@ -3385,7 +3268,7 @@ const renderPeopleTab = () => {
             )}
           </div>
 
-          {/* ✅ UPDATED: USER PROFILE DROPDOWN WITH GOOGLE PROFILE PICTURE SUPPORT */}
+          {/* USER PROFILE DROPDOWN */}
           <div className="user-profile" ref={userDropdownRef}>
             <button 
               className="user-profile-btn"
@@ -3396,7 +3279,6 @@ const renderPeopleTab = () => {
                 alt="User Avatar" 
                 className="user-avatar"
                 onError={(e) => {
-                  // Fallback to initials avatar if profile image fails to load
                   e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=203a43&color=fff`;
                 }}
               />
@@ -3408,7 +3290,6 @@ const renderPeopleTab = () => {
                     <div className="user-name">{user.name}</div>
                     <div className="user-email">{user.email}</div>
                     <div className="user-role">Role: {userRole}</div>
-                    {/* ✅ ADD PROFILE IMAGE PREVIEW */}
                     {user.profileImage && (
                       <div className="profile-image-preview">
                         <img 

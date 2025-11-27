@@ -5,7 +5,7 @@ const Class = require("../models/Class");
 const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
 
-// Get chat messages for a class
+// Get chat messages for a class - ✅ FIXED PROFILE IMAGE POPULATION
 router.get("/:classId/messages", authMiddleware, async (req, res) => {
   try {
     const { classId } = req.params;
@@ -32,6 +32,7 @@ router.get("/:classId/messages", authMiddleware, async (req, res) => {
       });
     }
 
+    // ✅ FIXED: Enhanced population to ensure profile images are included
     const messages = await ChatMessage.find({ 
       classId, 
       isDeleted: false 
@@ -46,14 +47,14 @@ router.get("/:classId/messages", authMiddleware, async (req, res) => {
 
     console.log(`✅ Found ${messages.length} messages for class ${classId}`);
     
-    // ✅ DEBUG: Check if profile images are being populated for ALL users
+    // ✅ ENHANCED DEBUG: Check profile images for ALL messages
     messages.forEach((msg, index) => {
       console.log(`👤 Message ${index + 1}:`, {
-        userName: msg.userName,
+        userName: msg.userId?.name,
         userId: msg.userId?._id,
-        profileImage: msg.profileImage,
-        populatedProfileImage: msg.userId?.profileImage,
-        hasUserId: !!msg.userId
+        profileImage: msg.userId?.profileImage,
+        hasProfileImage: !!msg.userId?.profileImage,
+        populatedUser: !!msg.userId
       });
     });
 
@@ -71,7 +72,7 @@ router.get("/:classId/messages", authMiddleware, async (req, res) => {
   }
 });
 
-// Send a new message (REST API fallback)
+// Send a new message (REST API fallback) - ✅ FIXED PROFILE IMAGE
 router.post("/:classId/messages", authMiddleware, async (req, res) => {
   try {
     const { classId } = req.params;
@@ -139,17 +140,23 @@ router.post("/:classId/messages", authMiddleware, async (req, res) => {
       userId,
       userName: userWithProfile.name,
       userRole,
-      profileImage: userWithProfile.profileImage,
+      profileImage: userWithProfile.profileImage, // ✅ Store profile image directly
       message: message.trim()
     });
 
+    // ✅ FIXED: Enhanced population for immediate response
     const populatedMessage = await ChatMessage.findById(newMessage._id)
-      .populate("userId", "name email profileImage role");
+      .populate({
+        path: "userId",
+        select: "name email profileImage role",
+        model: "User"
+      });
 
     console.log('✅ Message created via REST API:', {
       id: populatedMessage._id,
       userName: populatedMessage.userName,
       profileImage: populatedMessage.profileImage,
+      userProfileImage: populatedMessage.userId?.profileImage,
       userRole: populatedMessage.userRole
     });
 

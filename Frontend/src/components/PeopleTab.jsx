@@ -5,13 +5,15 @@ import './PeopleTab.css';
 
 // ✅ UPDATED AVATAR COMPONENT
 const PersonAvatar = ({ user, size = 40 }) => {
+  const [imageError, setImageError] = useState(false);
+  
   const getAvatarUrl = (user) => {
     // ✅ PRIORITIZE GOOGLE PROFILE IMAGE
-    if (user.profileImage) {
+    if (user.profileImage && user.profileImage.trim() !== '') {
       return user.profileImage;
     }
     // Fallback to avatar if exists
-    if (user.avatar) {
+    if (user.avatar && user.avatar.trim() !== '') {
       return user.avatar;
     }
     // Final fallback to initials
@@ -21,27 +23,28 @@ const PersonAvatar = ({ user, size = 40 }) => {
   const avatarUrl = getAvatarUrl(user);
   const initials = user.name ? user.name.charAt(0).toUpperCase() : '?';
 
+  const handleImageError = () => {
+    console.log('❌ PeopleTab avatar failed to load:', avatarUrl);
+    setImageError(true);
+  };
+
   return (
     <div 
       className="person-avatar" 
       style={{ width: size, height: size }}
     >
-      {avatarUrl ? (
+      {avatarUrl && !imageError ? (
         <img 
           src={avatarUrl} 
           alt={user.name}
           className="avatar-image"
-          onError={(e) => {
-            // If image fails to load, show initials
-            e.target.style.display = 'none';
-            const fallback = e.target.parentNode.querySelector('.avatar-fallback');
-            if (fallback) fallback.style.display = 'flex';
-          }}
+          onError={handleImageError}
         />
-      ) : null}
-      <div className={`avatar-fallback ${avatarUrl ? 'hidden' : ''}`}>
-        {initials}
-      </div>
+      ) : (
+        <div className="avatar-fallback">
+          {initials}
+        </div>
+      )}
     </div>
   );
 };
@@ -73,6 +76,12 @@ const PeopleTab = ({ classId }) => {
       const result = await response.json();
 
       if (result.success) {
+        console.log('👥 People data loaded:', {
+          teachers: result.data.teachers?.length || 0,
+          students: result.data.students?.length || 0,
+          teachersWithProfiles: result.data.teachers?.filter(t => t.profileImage).length || 0,
+          studentsWithProfiles: result.data.students?.filter(s => s.profileImage).length || 0
+        });
         setPeopleData(result.data);
       } else {
         setError(result.message);

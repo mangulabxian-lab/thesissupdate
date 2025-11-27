@@ -6,7 +6,7 @@ import {
 import io from 'socket.io-client';
 import './ChatForum.css';
 
-export default function ChatForum({ classId, currentUser }) {
+export default function ChatForum({ classId, currentUser, classMembers }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,6 +17,41 @@ export default function ChatForum({ classId, currentUser }) {
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
+  // ✅ IMPROVED: Enhanced user profile finder with better fallbacks
+  const findUserProfile = (userId, userName) => {
+    if (!classMembers) {
+      console.log('❌ classMembers is null/undefined');
+      return null;
+    }
+    
+    console.log('🔍 Searching for user profile:', { userId, userName });
+    
+    // Check all teachers
+    if (classMembers.teachers && classMembers.teachers.length > 0) {
+      const teacher = classMembers.teachers.find(t => 
+        t._id === userId || t.userId === userId || t.name === userName
+      );
+      if (teacher) {
+        console.log('👨‍🏫 Found teacher profile:', teacher.name, teacher.profileImage);
+        return teacher.profileImage || teacher.avatar;
+      }
+    }
+    
+    // Check all students  
+    if (classMembers.students && classMembers.students.length > 0) {
+      const student = classMembers.students.find(s => 
+        s._id === userId || s.userId === userId || s.name === userName
+      );
+      if (student) {
+        console.log('👨‍🎓 Found student profile:', student.name, student.profileImage);
+        return student.profileImage || student.avatar;
+      }
+    }
+    
+    console.log('❌ No profile found in class members for:', userName);
+    return null;
+  };
+
   const getInitials = (name = "") => {
     if (!name) return "?";
     const parts = name.trim().split(" ");
@@ -25,21 +60,59 @@ export default function ChatForum({ classId, currentUser }) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  // ✅ FIXED: Generate avatar URL for ALL users
+  // ✅ IMPROVED: Enhanced avatar URL function with multiple fallbacks
   const getAvatarUrl = (user) => {
-    if (!user) return null;
+    if (!user) {
+      console.log('❌ No user data provided');
+      return `https://ui-avatars.com/api/?name=User&background=667eea&color=fff&size=96`;
+    }
     
-    // If user has profile image, use it
-    if (user.profileImage) {
+    console.log('👤 Avatar user data:', {
+      id: user._id || user.id,
+      name: user.name || user.userName,
+      profileImage: user.profileImage,
+      hasProfileImage: !!user.profileImage
+    });
+
+    // ✅ 1. Check user's own profile image
+    if (user.profileImage && user.profileImage.trim() !== '') {
+      console.log('✅ Using user profile image');
       return user.profileImage;
     }
     
-    // ✅ FIX: Generate avatar for users without profile images
-    if (user.name) {
-      return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=667eea&color=fff&size=96`;
+    // ✅ 2. Check populated user data
+    if (user.userId && user.userId.profileImage && user.userId.profileImage.trim() !== '') {
+      console.log('✅ Using populated user profile image');
+      return user.userId.profileImage;
     }
     
-    // Fallback for unknown users
+    // ✅ 3. Check if profileImage is stored directly in message
+    if (user.profileImage && user.profileImage.trim() !== '') {
+      console.log('✅ Using direct message profile image');
+      return user.profileImage;
+    }
+    
+    // ✅ 4. NEW: Check Dashboard's class members data
+    const userId = user._id || user.id || (user.userId && user.userId._id);
+    const userName = user.name || user.userName || (user.userId && user.userId.name);
+    
+    if (userId || userName) {
+      const dashboardProfile = findUserProfile(userId, userName);
+      if (dashboardProfile) {
+        console.log('🎯 FOUND PROFILE IN DASHBOARD DATA:', dashboardProfile);
+        return dashboardProfile;
+      }
+    }
+    
+    // ✅ 5. Fallback to generated avatar
+    if (userName) {
+      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=667eea&color=fff&size=96`;
+      console.log('🔄 Using generated avatar:', avatarUrl);
+      return avatarUrl;
+    }
+    
+    // Final fallback
+    console.log('❌ No profile found, using default avatar');
     return `https://ui-avatars.com/api/?name=User&background=667eea&color=fff&size=96`;
   };
 
@@ -66,6 +139,14 @@ export default function ChatForum({ classId, currentUser }) {
           userName: getUserDisplayName(msg.userId || msg.sender),
           userRole: msg.userRole || (msg.userId?.role || msg.sender?.role)
         }));
+        
+        console.log('💬 Loaded messages with user data:', enhancedMessages.map(m => ({
+          id: m._id,
+          userName: m.userName,
+          userId: m.userId?._id,
+          profileImage: m.userId?.profileImage,
+          hasProfileImage: !!m.userId?.profileImage
+        })));
         
         setMessages(enhancedMessages);
       }
@@ -164,26 +245,43 @@ export default function ChatForum({ classId, currentUser }) {
     }
   };
 
-  // ✅ FIXED: Simple reliable Avatar component
+  // ✅ IMPROVED: Enhanced Avatar component with better error handling
   const Avatar = ({ user, size = 40 }) => {
+    const [avatarError, setAvatarError] = useState(false);
     const avatarUrl = getAvatarUrl(user);
+    const displayName = getUserDisplayName(user);
+    const initials = getInitials(displayName);
     
+    console.log('🖼️ Avatar rendering:', {
+      userName: displayName,
+      avatarUrl: avatarUrl,
+      userData: user
+    });
+    
+    const handleImageError = () => {
+      console.log('❌ Avatar image failed to load:', avatarUrl);
+      setAvatarError(true);
+    };
+
     return (
       <div className="avatar" style={{ width: size, height: size }}>
-        <img 
-          src={avatarUrl} 
-          alt={`${user?.name || 'User'}'s avatar`}
-          style={{ 
-            width: '100%', 
-            height: '100%', 
-            objectFit: 'cover',
-            display: 'block'
-          }}
-          onError={(e) => {
-            // Fallback if image fails to load
-            e.target.src = `https://ui-avatars.com/api/?name=${getInitials(user?.name)}&background=667eea&color=fff&size=96`;
-          }}
-        />
+        {!avatarError && avatarUrl ? (
+          <img 
+            src={avatarUrl} 
+            alt={`${displayName}'s avatar`}
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover',
+              display: 'block'
+            }}
+            onError={handleImageError}
+          />
+        ) : (
+          <div className="avatar-fallback">
+            {initials}
+          </div>
+        )}
       </div>
     );
   };
@@ -235,6 +333,14 @@ export default function ChatForum({ classId, currentUser }) {
         userName: getUserDisplayName(message.userId || message.sender),
         userRole: message.userRole || (message.userId?.role || message.sender?.role)
       };
+
+      console.log('💬 New message received:', {
+        messageId: enhancedMessage._id,
+        userName: enhancedMessage.userName,
+        userId: enhancedMessage.userId?._id,
+        profileImage: enhancedMessage.userId?.profileImage,
+        hasProfileImage: !!enhancedMessage.userId?.profileImage
+      });
 
       setMessages(prev => {
         if (prev.some(m => m._id === enhancedMessage._id)) return prev;
@@ -316,12 +422,29 @@ export default function ChatForum({ classId, currentUser }) {
             if (msg.isDeleted) return null;
             
             const isOwn = currentUser?.id === msg.userId?._id;
-            const displayName = getUserDisplayName(msg.userId);
-            const userRole = msg.userRole;
+            
+            // ✅ FIXED: Enhanced user data handling
+            const userData = msg.userId || msg.sender || {
+              _id: msg.userId?._id,
+              name: msg.userName,
+              profileImage: msg.profileImage,
+              role: msg.userRole
+            };
+            
+            const displayName = getUserDisplayName(userData);
+            const userRole = msg.userRole || userData.role;
+
+            console.log('💬 Message user data:', {
+              messageId: msg._id,
+              userName: displayName,
+              userData: userData,
+              profileImage: userData.profileImage,
+              isOwn: isOwn
+            });
 
             return (
               <div key={msg._id} className={`msg-row ${isOwn ? "own" : "other"}`}>
-                {!isOwn && <Avatar user={msg.userId} />}
+                {!isOwn && <Avatar user={userData} />}
 
                 <div className={`bubble ${isOwn ? "blue" : "grey"}`}>
                   <div className="message-header">

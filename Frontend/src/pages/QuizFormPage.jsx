@@ -1,7 +1,7 @@
-// frontend/src/pages/QuizFormPage.jsx - UPDATED WITH FILE UPLOAD
+// frontend/src/pages/QuizFormPage.jsx - UPDATED WITH FIXED DEPLOYMENT
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { createQuiz, updateQuiz, getQuizForEdit, deployExam, uploadFileAndParse } from '../lib/api'; // ✅ ADDED uploadFileAndParse
+import { createQuiz, updateQuiz, getQuizForEdit, deployExam, uploadFileAndParse } from '../lib/api';
 import './QuizFormPage.css';
 
 const QuizFormPage = () => {
@@ -19,8 +19,17 @@ const QuizFormPage = () => {
     totalPoints: 0
   });
   const [loading, setLoading] = useState(false);
-  const [uploadLoading, setUploadLoading] = useState(false); // ✅ ADDED: Separate loading for upload
+  const [uploadLoading, setUploadLoading] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  // Debug effect to check classId
+  useEffect(() => {
+    console.log("🔍 QuizFormPage Debug Info:");
+    console.log("📍 classId from URL:", classId);
+    console.log("📍 examId from URL:", examId);
+    console.log("📍 location.state:", location.state);
+    console.log("📍 existingExamFromState:", existingExamFromState);
+  }, [classId, examId, location.state]);
 
   useEffect(() => {
     if (examId || existingExamFromState) {
@@ -54,12 +63,10 @@ const QuizFormPage = () => {
     }
   };
 
-  // ✅ ADDED: File upload handler
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Validate file type
     const validTypes = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -71,7 +78,6 @@ const QuizFormPage = () => {
       return;
     }
 
-    // Validate file size (10MB max)
     if (file.size > 10 * 1024 * 1024) {
       alert('File size must be less than 10MB');
       return;
@@ -89,10 +95,9 @@ const QuizFormPage = () => {
       if (response.success) {
         const { questions, title, description } = response.data;
         
-        // Merge uploaded questions with existing ones
         const newQuestions = questions.map((q, index) => ({
           ...q,
-          id: Date.now() + Math.random() + index, // Ensure unique IDs
+          id: Date.now() + Math.random() + index,
           order: quiz.questions.length + index,
           points: q.points || 1,
           correctAnswer: q.correctAnswer || null,
@@ -114,7 +119,6 @@ const QuizFormPage = () => {
       alert('Failed to process file: ' + (error.response?.data?.message || error.message));
     } finally {
       setUploadLoading(false);
-      // Reset file input
       event.target.value = '';
     }
   };
@@ -174,6 +178,13 @@ const QuizFormPage = () => {
     try {
       setLoading(true);
       
+      // Validate classId exists
+      if (!classId) {
+        console.error("❌ Class ID is missing in save:", classId);
+        alert("Error: Class information is missing. Please go back and try again.");
+        return;
+      }
+      
       const questionsForBackend = quiz.questions.map(({ id, ...question }) => question);
 
       let response;
@@ -197,6 +208,8 @@ const QuizFormPage = () => {
 
       if (response.success) {
         alert(editing ? 'Form updated successfully!' : 'Form created successfully!');
+        
+        // ✅ FIXED: Consistent navigation
         navigate(`/class/${classId}`, {
           state: { 
             activeTab: 'classwork',
@@ -216,13 +229,25 @@ const QuizFormPage = () => {
     try {
       setLoading(true);
       
+      // Validate classId exists
+      if (!classId) {
+        console.error("❌ Class ID is missing:", classId);
+        alert("Error: Class information is missing. Please go back and try again.");
+        return;
+      }
+
+      console.log("🎯 Deploying quiz for class:", classId);
+      
       const questionsForBackend = quiz.questions.map(({ id, ...question }) => question);
 
       let response;
       let savedExamId;
 
+      // First save/update the quiz
       if (editing) {
         const examIdToUpdate = examId || quiz._id;
+        console.log("📝 Updating existing quiz:", examIdToUpdate);
+        
         response = await updateQuiz(examIdToUpdate, {
           title: quiz.title,
           description: quiz.description,
@@ -231,6 +256,8 @@ const QuizFormPage = () => {
         });
         savedExamId = examIdToUpdate;
       } else {
+        console.log("📝 Creating new quiz for class:", classId);
+        
         response = await createQuiz(classId, {
           title: quiz.title,
           description: quiz.description,
@@ -242,21 +269,40 @@ const QuizFormPage = () => {
       }
 
       if (response.success) {
+        console.log("✅ Quiz saved successfully, now deploying:", savedExamId);
+        
+        // Deploy the exam
         const deployResponse = await deployExam(savedExamId);
         
         if (deployResponse.success) {
-          alert('Quiz deployed successfully! Students can now see it in classwork.');
+          console.log("🚀 Quiz deployed successfully! Navigating to classwork...");
+          
+          // ✅ FIXED: Proper navigation with classId
           navigate(`/class/${classId}`, {
             state: { 
               activeTab: 'classwork',
-              refresh: true 
+              refresh: true,
+              showSuccess: true,
+              message: 'Quiz deployed successfully! Students can now see it in classwork.'
             }
           });
+        } else {
+          throw new Error(deployResponse.message || 'Deployment failed');
         }
+      } else {
+        throw new Error(response.message || 'Save failed');
       }
     } catch (error) {
-      console.error('Failed to deploy quiz:', error);
-      alert('Failed to deploy quiz: ' + (error.response?.data?.message || error.message));
+      console.error("❌ Failed to deploy quiz:", error);
+      
+      // More specific error messages
+      if (error.response?.status === 404) {
+        alert("Class not found. Please check if the class still exists.");
+      } else if (error.response?.status === 403) {
+        alert("You don't have permission to deploy quizzes in this class.");
+      } else {
+        alert('Failed to deploy quiz: ' + (error.response?.data?.message || error.message));
+      }
     } finally {
       setLoading(false);
     }
@@ -324,7 +370,7 @@ const QuizFormPage = () => {
           </div>
         </div>
 
-        {/* ✅ ADDED: File Upload Section */}
+        {/* File Upload Section */}
         <div className="file-upload-section">
           <div className="upload-card">
             <div className="upload-icon">📄</div>
@@ -397,8 +443,7 @@ const QuizFormPage = () => {
   );
 };
 
-
-// ✅ UPDATED QuestionEditor Component with Answer Key & Points
+// QuestionEditor Component
 const QuestionEditor = ({ question, index, onUpdate, onDelete, onDuplicate }) => {
   const handleTitleChange = (e) => {
     onUpdate({ title: e.target.value });
@@ -427,7 +472,6 @@ const QuestionEditor = ({ question, index, onUpdate, onDelete, onDuplicate }) =>
     }
   };
 
-  // ✅ ADDED: Answer key handlers
   const handleCorrectAnswerChange = (optionIndex) => {
     if (question.type === 'multiple-choice') {
       onUpdate({ correctAnswer: optionIndex });
@@ -492,7 +536,7 @@ const QuestionEditor = ({ question, index, onUpdate, onDelete, onDuplicate }) =>
         </div>
       </div>
       
-      {/* ✅ ADDED: Points input */}
+      {/* Points input */}
       <div className="question-points">
         <label>Points:</label>
         <input
@@ -520,7 +564,7 @@ const QuestionEditor = ({ question, index, onUpdate, onDelete, onDuplicate }) =>
                   placeholder={`Option ${idx + 1}`}
                 />
                 
-                {/* ✅ ADDED: Answer key selector */}
+                {/* Answer key selector */}
                 <label className="correct-answer-checkbox">
                   <input
                     type={question.type === 'multiple-choice' ? 'radio' : 'checkbox'}
@@ -561,7 +605,7 @@ const QuestionEditor = ({ question, index, onUpdate, onDelete, onDuplicate }) =>
               placeholder="Short answer text"
               disabled
             />
-            {/* ✅ ADDED: Answer key for short answer */}
+            {/* Answer key for short answer */}
             <div className="answer-key-section">
               <label>Correct Answer:</label>
               <input
@@ -583,7 +627,7 @@ const QuestionEditor = ({ question, index, onUpdate, onDelete, onDuplicate }) =>
               disabled
               rows={3}
             />
-            {/* ✅ ADDED: Answer key for paragraph */}
+            {/* Answer key for paragraph */}
             <div className="answer-key-section">
               <label>Expected Answer Key:</label>
               <textarea

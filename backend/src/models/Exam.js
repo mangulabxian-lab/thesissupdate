@@ -1,4 +1,4 @@
-// backend/models/Exam.js - COMPLETE FIXED VERSION
+// backend/models/Exam.js - COMPLETE FIXED VERSION WITH COMPLETION TRACKING
 const mongoose = require("mongoose");
 
 const examSchema = new mongoose.Schema({
@@ -8,10 +8,10 @@ const examSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   
   // ✅ LIVE EXAM SESSION FIELDS
-  isActive: { type: Boolean, default: false }, // Active session
-  startedAt: { type: Date }, // When session started
-  endedAt: { type: Date }, // When session ended
-  timeLimit: { type: Number, default: 60 }, // Exam duration in minutes
+  isActive: { type: Boolean, default: false },
+  startedAt: { type: Date },
+  endedAt: { type: Date },
+  timeLimit: { type: Number, default: 60 },
   
   // ✅ JOINED STUDENTS TRACKING
   joinedStudents: [{
@@ -22,13 +22,45 @@ const examSchema = new mongoose.Schema({
     microphoneEnabled: { type: Boolean, default: true }
   }],
 
+  // ✅ COMPLETION TRACKING - ADD THIS SECTION
+  completedBy: [{
+    studentId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "User", 
+      required: true 
+    },
+    completedAt: { 
+      type: Date, 
+      default: Date.now 
+    },
+    score: { 
+      type: Number 
+    },
+    maxScore: {
+      type: Number
+    },
+    percentage: {
+      type: Number
+    },
+    answers: [{
+      questionIndex: Number,
+      answer: mongoose.Schema.Types.Mixed,
+      isCorrect: Boolean,
+      points: Number
+    }],
+    submittedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
   // Quiz/Exam specific fields
   isQuiz: { type: Boolean, default: false },
   isDeployed: { type: Boolean, default: false },
-  isPublished: { type: Boolean, default: false }, // ✅ ADD THIS MISSING FIELD
+  isPublished: { type: Boolean, default: false },
   totalPoints: { type: Number, default: 0 },
   
-  // Questions array with enhanced answer key functionality
+  // Questions array
   questions: [{
     type: { 
       type: String, 
@@ -86,7 +118,7 @@ const examSchema = new mongoose.Schema({
   // Timestamps
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
-  publishedAt: { type: Date } // ✅ ADD THIS FIELD TOO
+  publishedAt: { type: Date }
 });
 
 // ✅ Calculate total points before saving
@@ -104,5 +136,19 @@ examSchema.pre("save", function(next) {
   
   next();
 });
+
+// ✅ Method to check if student has completed the exam
+examSchema.methods.hasStudentCompleted = function(studentId) {
+  return this.completedBy.some(completion => 
+    completion.studentId.toString() === studentId.toString()
+  );
+};
+
+// ✅ Method to get student completion data
+examSchema.methods.getStudentCompletion = function(studentId) {
+  return this.completedBy.find(completion => 
+    completion.studentId.toString() === studentId.toString()
+  );
+};
 
 module.exports = mongoose.models.Exam || mongoose.model("Exam", examSchema);

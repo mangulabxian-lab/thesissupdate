@@ -1739,6 +1739,7 @@ const handleProctoringAlert = useCallback((alertData) => {
     handleAnswerChange(questionIndex, newAnswers);
   }, [answers, handleAnswerChange]);
 
+  // ==================== UPDATED SUBMIT QUIZ FUNCTION ====================
   const handleSubmitQuiz = async () => {
     if (!window.confirm('Are you sure you want to submit your answers?')) return;
     
@@ -1752,11 +1753,30 @@ const handleProctoringAlert = useCallback((alertData) => {
 
     setSubmitting(true);
     try {
+      // ✅ FIRST: Submit quiz answers
       const submissionResponse = await submitQuizAnswers(examId, answers);
       
       if (submissionResponse.success) {
-        alert('✅ Answers submitted successfully!');
+        // ✅ SECOND: MARK EXAM AS COMPLETED IN BACKEND
+        try {
+          await api.post(`/exams/${examId}/complete`, {
+            score: submissionResponse.data.score,
+            maxScore: submissionResponse.data.maxScore,
+            percentage: submissionResponse.data.percentage,
+            answers: Object.entries(answers).map(([index, answer]) => ({
+              questionIndex: parseInt(index),
+              answer: answer
+            }))
+          });
+          console.log("✅ Exam marked as completed in backend");
+        } catch (completionError) {
+          console.error("❌ Failed to mark exam as completed:", completionError);
+          // Continue anyway - the main submission was successful
+        }
+
+        alert('✅ Answers submitted successfully! Your exam has been moved to "Done" section.');
         
+        // Clean up resources
         if (localStream) {
           localStream.getTracks().forEach(track => track.stop());
         }
@@ -1764,7 +1784,14 @@ const handleProctoringAlert = useCallback((alertData) => {
           peerConnection.close();
         }
         
-        navigate('/dashboard');
+        // ✅ NAVIGATE TO DASHBOARD WITH COMPLETION STATE
+        navigate('/dashboard', { 
+          state: { 
+            examCompleted: true,
+            examId: examId,
+            message: 'Quiz completed successfully!'
+          }
+        });
       } else {
         throw new Error(submissionResponse.message || 'Submission failed');
       }

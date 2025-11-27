@@ -47,7 +47,7 @@ export default function RoleSelectionModal({ user, onRoleSelected }) {
         {/* Header */}
         <div className="role-modal-header">
           <div className="welcome-icon"></div>
-          <h2>Welcome to CAPSTONE, {user.name}!</h2>
+          <h2>Welcome to VisionProctor, {user.name}!</h2>
           <p>Please choose your role</p>
         </div>
         

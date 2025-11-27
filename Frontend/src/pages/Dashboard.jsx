@@ -115,6 +115,10 @@ export default function Dashboard() {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [emailData, setEmailData] = useState({ subject: '', message: '' });
 
+  // ===== COMPLETED EXAMS STATE =====
+  const [completedExams, setCompletedExams] = useState([]);
+  const [loadingCompleted, setLoadingCompleted] = useState(false);
+
   // ===== REFS FOR CLICK OUTSIDE DETECTION =====
   const userDropdownRef = useRef(null);
   const createJoinDropdownRef = useRef(null);
@@ -574,12 +578,42 @@ export default function Dashboard() {
     }
   };
 
+  // ===== COMPLETED EXAMS FUNCTIONS =====
+  const fetchCompletedExams = async () => {
+    if (selectedClass?.userRole !== 'student') return;
+    
+    setLoadingCompleted(true);
+    try {
+      const response = await api.get('/exams/student/completed');
+      if (response.data.success) {
+        // Filter completed exams for current class only
+        const classCompletedExams = response.data.data.filter(exam => 
+          exam.classId === selectedClass._id
+        );
+        setCompletedExams(classCompletedExams);
+      }
+    } catch (error) {
+      console.error('Failed to fetch completed exams:', error);
+    } finally {
+      setLoadingCompleted(false);
+    }
+  };
+
   // ===== EFFECT FOR HANDLING REDIRECT STATE =====
   useEffect(() => {
     if (location.state) {
-      const { selectedClassId, activeTab, showClasswork, refreshClasswork } = location.state;
+      const { selectedClassId, activeTab, showClasswork, refreshClasswork, examCompleted } = location.state;
       
       console.log("🔄 Handling redirect state:", location.state);
+      
+      if (examCompleted) {
+        // Refresh classwork to hide the completed exam
+        fetchClasswork();
+        // Refresh completed exams
+        fetchCompletedExams();
+        // Optionally show a success message
+        alert('✅ Quiz completed successfully! It has been moved to your completed work.');
+      }
       
       if (selectedClassId && classes.length > 0) {
         const targetClass = classes.find(c => c._id === selectedClassId);
@@ -870,6 +904,13 @@ export default function Dashboard() {
   useEffect(() => {
     generateCalendarEvents();
   }, [classes]);
+
+  // Effect para i-fetch ang completed exams kapag nagbago ang selected class
+  useEffect(() => {
+    if (selectedClass && selectedClass.userRole === 'student') {
+      fetchCompletedExams();
+    }
+  }, [selectedClass]);
 
   // Function para kunin ang classwork
   const fetchClasswork = async () => {
@@ -1247,6 +1288,56 @@ export default function Dashboard() {
             name: user.name
           }}
         />
+      </div>
+    );
+  };
+
+  // ===== COMPLETED EXAMS RENDERER =====
+  const renderCompletedExams = () => {
+    if (selectedClass?.userRole !== 'student' || completedExams.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="completed-exams-section">
+        <div className="section-header">
+          <h3>✅ Completed Work</h3>
+          <p>Exams and quizzes you've finished</p>
+        </div>
+        
+        <div className="completed-exams-grid">
+          {completedExams.map((exam) => (
+            <div key={exam._id} className="completed-exam-card">
+              <div className="exam-header">
+                <span className="exam-icon">📝</span>
+                <h4>{exam.title}</h4>
+              </div>
+              
+              <div className="exam-details">
+                <p className="exam-description">{exam.description || 'Completed exam'}</p>
+                
+                <div className="completion-info">
+                  <div className="score-info">
+                    <span className="score">Score: {exam.score}/{exam.maxScore}</span>
+                    <span className="percentage">({exam.percentage}%)</span>
+                  </div>
+                  <div className="completion-date">
+                    Completed: {new Date(exam.completedAt).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="exam-actions">
+                <button className="review-btn" onClick={() => {
+                  // Navigate to review page if you have one
+                  navigate(`/review-exam/${exam._id}`);
+                }}>
+                  Review Answers
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -2675,6 +2766,18 @@ const renderPeopleTab = () => {
 
   // Classwork Tab na may START QUIZ BUTTON FOR STUDENTS
   const renderClassworkTab = () => {
+    // ✅ ADDED: Filter classwork to hide completed exams for students
+    const filteredClasswork = classwork.filter(item => {
+      if (selectedClass?.userRole === "student" && item.type === 'quiz') {
+        // Check if this student has completed this exam
+        const hasCompleted = item.completedBy?.some(completion => 
+          completion.studentId === user._id
+        );
+        return !hasCompleted; // ✅ HIDE COMPLETED EXAMS
+      }
+      return true;
+    });
+
     return (
       <div className="classwork-tab">
         <div className="classwork-header-section">
@@ -2789,23 +2892,23 @@ const renderPeopleTab = () => {
         </div>
 
         <div className="classwork-content">
-          {classwork.length === 0 ? (
+          {filteredClasswork.length === 0 ? ( // ✅ CHANGED: Use filteredClasswork instead of classwork
             <div className="classwork-empty-state">
               <div className="empty-illustration">
                 
               </div>
               <div className="empty-content">
-                <h3>No classwork yet</h3>
+                <h3>No classwork available</h3>
                 <p>
                   {selectedClass?.userRole === "teacher" 
                     ? "Create assignments, quizzes, or materials to get started."
-                    : "Your teacher hasn't posted any classwork yet."}
+                    : "All available work has been completed or no classwork is available."}
                 </p>
               </div>
             </div>
           ) : (
             <div className="classwork-grid">
-              {classwork.map((item) => (
+              {filteredClasswork.map((item) => ( // ✅ CHANGED: Use filteredClasswork instead of classwork
                 <div className="classwork-card" key={item._id}>
                   <div className="classwork-header">
                     <span className="classwork-icon">
@@ -2817,65 +2920,65 @@ const renderPeopleTab = () => {
                     </div>
                     
                     {/* TEACHER ACTIONS */}
-{selectedClass?.userRole === "teacher" && item.type === 'quiz' && (
-  <div className="teacher-exam-actions">
-    {!item.isActive ? (
-      <div className="session-controls">
-        <button 
-          className="start-session-btn"
-          onClick={() => handleStartExamSession(item)}
-          title="Start live exam session"
-        >
-          START
-        </button>
-        
-        {!item.isDeployed ? (
-          <button 
-            className="deploy-exam-btn"
-            onClick={() => handleDeployExam(item)}
-            title="Deploy exam for students"
-          >
-            🚀 Deploy Exam
-          </button>
-        ) : (
-          <button 
-            className="undeploy-exam-btn"
-            onClick={() => handleUndeployExam(item._id)}
-            title="Undeploy exam"
-          >
-            END
-          </button>
-        )}
-      </div>
-    ) : (
-      <div className="active-session-controls">
-        <button 
-          className="view-session-btn"
-          onClick={() => navigate(`/teacher-exam/${item._id}`)}
-          title="Manage active session"
-        >
-          START
-        </button>
-        <button 
-          className="end-session-btn"
-          onClick={() => handleEndExamSession(item._id)}
-          title="End exam session"
-        >
-          END
-        </button>
-      </div>
-    )}
-    
-    <button 
-      className="delete-quiz-btn"
-      onClick={() => handleDeleteQuiz(item._id, item.title)}
-      disabled={deletingQuiz === item._id}
-      title="Delete this quiz"
-    >
-      {deletingQuiz === item._id ? ' Deleting...' : ''} DELETE
-    </button>
-  </div>
-)}
+                    {selectedClass?.userRole === "teacher" && item.type === 'quiz' && (
+                      <div className="teacher-exam-actions">
+                        {!item.isActive ? (
+                          <div className="session-controls">
+                            <button 
+                              className="start-session-btn"
+                              onClick={() => handleStartExamSession(item)}
+                              title="Start live exam session"
+                            >
+                              START
+                            </button>
+                            
+                            {!item.isDeployed ? (
+                              <button 
+                                className="deploy-exam-btn"
+                                onClick={() => handleDeployExam(item)}
+                                title="Deploy exam for students"
+                              >
+                                🚀 Deploy Exam
+                              </button>
+                            ) : (
+                              <button 
+                                className="undeploy-exam-btn"
+                                onClick={() => handleUndeployExam(item._id)}
+                                title="Undeploy exam"
+                              >
+                                END
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="active-session-controls">
+                            <button 
+                              className="view-session-btn"
+                              onClick={() => navigate(`/teacher-exam/${item._id}`)}
+                              title="Manage active session"
+                            >
+                              START
+                            </button>
+                            <button 
+                              className="end-session-btn"
+                              onClick={() => handleEndExamSession(item._id)}
+                              title="End exam session"
+                            >
+                              END
+                            </button>
+                          </div>
+                        )}
+                        
+                        <button 
+                          className="delete-quiz-btn"
+                          onClick={() => handleDeleteQuiz(item._id, item.title)}
+                          disabled={deletingQuiz === item._id}
+                          title="Delete this quiz"
+                        >
+                          {deletingQuiz === item._id ? ' Deleting...' : ''} DELETE
+                        </button>
+                      </div>
+                    )}
                   </div>
                   
                   {item.description && (
@@ -2897,79 +3000,79 @@ const renderPeopleTab = () => {
                   </div>
 
                   {/* START QUIZ BUTTON FOR STUDENTS */}
-{selectedClass?.userRole === "student" && item.type === 'quiz' && (
-  <div className="classwork-actions">
-    {item.isActive ? (
-      <div className="quiz-availability">
-        <button 
-          className="start-quiz-btn camera-required"
-          onClick={async () => {
-            try {
-              setQuizLoading(true);
-              
-              const joinResponse = await joinExamSession(item._id);
-              if (joinResponse.success) {
-                navigate(`/student-quiz/${item._id}`, {
-                  state: {
-                    examTitle: item.title,
-                    classId: selectedClass?._id,
-                    className: selectedClass?.name,
-                    requiresCamera: true,
-                    isExamSession: true
-                  }
-                });
-              }
-            } catch (error) {
-              console.error("Failed to join exam session:", error);
-              alert("❌ Failed to join exam session. Please try again.");
-            } finally {
-              setQuizLoading(false);
-            }
-          }}
-          disabled={quizLoading}
-          title="Join live exam session (Camera & Microphone required)"
-        >
-          {quizLoading ? 'Joining...' : (
-            <>
-              📹 Join Live Exam
-              <span className="camera-badge">📷🎤</span>
-            </>
-          )}
-        </button>
-        
-        <div className="session-info">
-          <small>✅ Live session active • 📷🎤 Camera & Mic required</small>
-        </div>
-      </div>
-    ) : item.isPublished || item.isDeployed ? (
-      <div className="quiz-info waiting">
-        <button className="start-quiz-btn" disabled>
-          ⏳ Waiting for Teacher
-        </button>
-        <small>Teacher needs to start the live session</small>
-      </div>
-    ) : (
-      <div className="quiz-info unavailable">
-        <small>This exam is not available yet</small>
-      </div>
-    )}
+                  {selectedClass?.userRole === "student" && item.type === 'quiz' && (
+                    <div className="classwork-actions">
+                      {item.isActive ? (
+                        <div className="quiz-availability">
+                          <button 
+                            className="start-quiz-btn camera-required"
+                            onClick={async () => {
+                              try {
+                                setQuizLoading(true);
+                                
+                                const joinResponse = await joinExamSession(item._id);
+                                if (joinResponse.success) {
+                                  navigate(`/student-quiz/${item._id}`, {
+                                    state: {
+                                      examTitle: item.title,
+                                      classId: selectedClass?._id,
+                                      className: selectedClass?.name,
+                                      requiresCamera: true,
+                                      isExamSession: true
+                                    }
+                                  });
+                                }
+                              } catch (error) {
+                                console.error("Failed to join exam session:", error);
+                                alert("❌ Failed to join exam session. Please try again.");
+                              } finally {
+                                setQuizLoading(false);
+                              }
+                            }}
+                            disabled={quizLoading}
+                            title="Join live exam session (Camera & Microphone required)"
+                          >
+                            {quizLoading ? 'Joining...' : (
+                              <>
+                                📹 Join Live Exam
+                                <span className="camera-badge">📷🎤</span>
+                              </>
+                            )}
+                          </button>
+                          
+                          <div className="session-info">
+                            <small>✅ Live session active • 📷🎤 Camera & Mic required</small>
+                          </div>
+                        </div>
+                      ) : item.isPublished || item.isDeployed ? (
+                        <div className="quiz-info waiting">
+                          <button className="start-quiz-btn" disabled>
+                            ⏳ Waiting for Teacher
+                          </button>
+                          <small>Teacher needs to start the live session</small>
+                        </div>
+                      ) : (
+                        <div className="quiz-info unavailable">
+                          <small>This exam is not available yet</small>
+                        </div>
+                      )}
 
-    <div className="quiz-details">
-      {item.questions && (
-        <span>{item.questions.length} questions</span>
-      )}
-      {item.totalPoints > 0 && (
-        <span>{item.totalPoints} points</span>
-      )}
-      {item.dueDate && (
-        <span>Due: {new Date(item.dueDate).toLocaleDateString()}</span>
-      )}
-      {item.isActive && (
-        <span className="live-badge">🔴 LIVE</span>
-      )}
-    </div>
-  </div>
-)}
+                      <div className="quiz-details">
+                        {item.questions && (
+                          <span>{item.questions.length} questions</span>
+                        )}
+                        {item.totalPoints > 0 && (
+                          <span>{item.totalPoints} points</span>
+                        )}
+                        {item.dueDate && (
+                          <span>Due: {new Date(item.dueDate).toLocaleDateString()}</span>
+                        )}
+                        {item.isActive && (
+                          <span className="live-badge">🔴 LIVE</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="classwork-footer">
                     <span>Created by {item.createdBy?.name || 'Teacher'}</span>
@@ -2979,6 +3082,9 @@ const renderPeopleTab = () => {
               ))}
             </div>
           )}
+
+          {/* ✅ ADDED: Render completed exams section for students */}
+          {renderCompletedExams()}
         </div>
       </div>
     );
@@ -3316,7 +3422,7 @@ const renderPeopleTab = () => {
             <FaBars className="hamburger-icon" />
           </button>
           <a href="/" className="logo">
-            <span>CAPSTONE</span>
+            <span>ProctorVision</span>
           </a>
         </div>
 

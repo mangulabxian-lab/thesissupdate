@@ -1,4 +1,4 @@
-// src/components/Dashboard.jsx - NOTIFICATION BELL AND DASHBOARD PAGE REMOVED
+// src/components/Dashboard.jsx - UPDATED WITH DIRECT QUIZ CREATION
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEllipsisV, FaChevronDown, FaEnvelope, FaUserMinus, FaVolumeMute, FaVolumeUp, FaSave, FaTimes } from "react-icons/fa";
@@ -19,7 +19,7 @@ export default function Dashboard() {
   const location = useLocation();
 
   // ===== USER AT CLASS STATES =====
-  const [user, setUser] = useState({ name: "Loading...", email: "", _id: "" });
+  const [user, setUser] = useState({ name: "Loading...", email: "", _id: "", profileImage: "" });
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [activeSidebar, setActiveSidebar] = useState("home");
@@ -104,9 +104,6 @@ export default function Dashboard() {
   // ===== REVIEW COUNT STATE =====
   const [itemsToReview, setItemsToReview] = useState(0);
 
-  // ===== CREATE DROPDOWN STATE =====
-  const [showCreateDropdown, setShowCreateDropdown] = useState(false);
-
   // ===== PEOPLE TAB STATES =====
   const [classPeople, setClassPeople] = useState({ teachers: [], students: [] });
   const [loadingPeople, setLoadingPeople] = useState(false);
@@ -126,7 +123,6 @@ export default function Dashboard() {
   const menuRef = useRef(null);
   const commentMenuRef = useRef(null);
   const commentDeleteMenuRef = useRef(null);
-  const createDropdownRef = useRef(null);
   const actionsDropdownRef = useRef(null);
   const settingsModalRef = useRef(null);
 
@@ -135,12 +131,18 @@ export default function Dashboard() {
   const enrolledClasses = classes.filter(classData => classData.userRole === "student" || !classData.isTeacher);
   const allClasses = [...classes];
 
+  // ===== DEBUG: LOG USER DATA =====
+  useEffect(() => {
+    console.log('🔄 Current user data:', user);
+    console.log('🖼️ User profile image:', user?.profileImage);
+  }, [user]);
+
   // ===== SETTINGS FUNCTIONS =====
   const handleManageSettings = () => {
     setSettingsData({
       name: user.name,
       email: user.email,
-      profilePicture: user.profilePicture || '',
+      profilePicture: user.profileImage || '',
       // ✅ NOTIFICATION SETTINGS REMOVED
     });
     setShowSettingsModal(true);
@@ -157,7 +159,7 @@ export default function Dashboard() {
       });
       
       if (response.data.success) {
-        setUser(prev => ({ ...prev, ...settingsData }));
+        setUser(prev => ({ ...prev, ...settingsData, profileImage: settingsData.profilePicture }));
         alert("✅ Settings updated successfully!");
         setShowSettingsModal(false);
       } else {
@@ -190,29 +192,42 @@ export default function Dashboard() {
     }
   };
 
-  // ===== PEOPLE TAB FUNCTIONS =====
+  // ===== PEOPLE TAB FUNCTIONS - UPDATED =====
   const fetchClassPeople = async () => {
     if (!selectedClass) return;
     
     setLoadingPeople(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/api/student-management/${selectedClass._id}/students`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // ✅ FIXED: Use the correct class members API endpoint
+      const response = await api.get(`/class/${selectedClass._id}/members`);
       
-      const result = await response.json();
+      console.log('👥 Class members API response:', response.data);
       
-      if (result.success) {
-        setClassPeople(result.data);
+      if (response.data.success) {
+        // ✅ Transform the data to match your PeopleTab component structure
+        const members = response.data.data || [];
+        
+        // Separate teachers and students
+        const teachers = members.filter(member => member.role === "teacher");
+        const students = members.filter(member => member.role === "student");
+        
+        setClassPeople({
+          teachers: teachers,
+          students: students
+        });
+        
+        console.log('✅ People data loaded:', { 
+          teachers: teachers.length, 
+          students: students.length 
+        });
       } else {
-        console.error('Failed to fetch people data:', result.message);
+        console.error('Failed to fetch people data:', response.data.message);
+        setClassPeople({ teachers: [], students: [] });
       }
     } catch (err) {
       console.error('Error fetching people data:', err);
+      // Fallback to empty data
+      setClassPeople({ teachers: [], students: [] });
     } finally {
       setLoadingPeople(false);
     }
@@ -224,22 +239,16 @@ export default function Dashboard() {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/api/student-management/${selectedClass._id}/students/${studentId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      // ✅ FIXED: Use the correct API endpoint for unenrolling students
+      const response = await api.delete(`/class/${selectedClass._id}/unenroll`, {
+        data: { studentId }
       });
 
-      const result = await response.json();
-
-      if (result.success) {
+      if (response.data.success) {
         alert('Student removed successfully');
         fetchClassPeople(); // Refresh data
       } else {
-        alert('Failed to remove student: ' + result.message);
+        alert('Failed to remove student: ' + response.data.message);
       }
     } catch (err) {
       alert('Failed to remove student');
@@ -249,22 +258,14 @@ export default function Dashboard() {
 
   const handleToggleMute = async (studentId, studentName, isCurrentlyMuted) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/api/student-management/${selectedClass._id}/students/${studentId}/mute`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Note: You'll need to implement this endpoint in your backend
+      const response = await api.patch(`/student-management/${selectedClass._id}/students/${studentId}/mute`);
 
-      const result = await response.json();
-
-      if (result.success) {
+      if (response.data.success) {
         alert(`Student ${isCurrentlyMuted ? 'unmuted' : 'muted'} successfully`);
         fetchClassPeople(); // Refresh data
       } else {
-        alert('Failed to update student: ' + result.message);
+        alert('Failed to update student: ' + response.data.message);
       }
     } catch (err) {
       alert('Failed to update student');
@@ -304,29 +305,20 @@ export default function Dashboard() {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/api/student-management/${selectedClass._id}/email-students`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          studentIds: selectedStudents,
-          subject: emailData.subject,
-          message: emailData.message
-        })
+      // Note: You'll need to implement this endpoint in your backend
+      const response = await api.post(`/student-management/${selectedClass._id}/email-students`, {
+        studentIds: selectedStudents,
+        subject: emailData.subject,
+        message: emailData.message
       });
 
-      const result = await response.json();
-
-      if (result.success) {
-        alert(`Email prepared for ${result.data.recipients} students`);
+      if (response.data.success) {
+        alert(`Email prepared for ${response.data.data.recipients} students`);
         setShowEmailModal(false);
         setSelectedStudents([]);
         setEmailData({ subject: '', message: '' });
       } else {
-        alert('Failed to send emails: ' + result.message);
+        alert('Failed to send emails: ' + response.data.message);
       }
     } catch (err) {
       alert('Failed to send emails');
@@ -739,10 +731,6 @@ export default function Dashboard() {
         setShowCommentMenu(null);
       }
 
-      if (createDropdownRef.current && !createDropdownRef.current.contains(event.target)) {
-        setShowCreateDropdown(false);
-      }
-
       // FIXED: Add click outside handler for actions dropdown
       if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(event.target)) {
         setActiveActions(null);
@@ -816,7 +804,7 @@ export default function Dashboard() {
         const userRes = await api.get("/auth/me");
         const userData = userRes.data;
         setUser(userData);
-        console.log("✅ User data:", userData);
+        console.log("✅ User data with profile image:", userData);
 
         const storedRole = localStorage.getItem('userRole');
         const userRoleFromAPI = userData.role;
@@ -981,42 +969,6 @@ export default function Dashboard() {
       topic: "📂"
     };
     return icons[type] || "📄";
-  };
-
-  // ===== CREATE DROPDOWN HANDLER =====
-  const handleCreateOption = (option) => {
-    console.log("Selected:", option);
-    setShowCreateDropdown(false);
-    
-    switch(option) {
-      case 'assignment':
-        alert('Create Assignment clicked');
-        break;
-      case 'quiz':
-        if (selectedClass) {
-          navigate(`/class/${selectedClass._id}/quiz/new`);
-        } else {
-          alert('Please select a class first');
-        }
-        break;
-      case 'question':
-        alert('Create Question clicked');
-        break;
-      case 'material':
-        alert('Create Material clicked');
-        break;
-      case 'reuse':
-        alert('Reuse Post clicked');
-        break;
-      case 'topic':
-        alert('Create Topic clicked');
-        break;
-      case 'delete-all':
-        handleDeleteAllQuizzes();
-        break;
-      default:
-        break;
-    }
   };
 
   // ===== CALENDAR FUNCTIONS =====
@@ -1274,23 +1226,25 @@ export default function Dashboard() {
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
-  // ===== CHAT TAB RENDERER =====
-  const renderChatTab = () => {
-    if (!selectedClass) return null;
-    
-    return (
-      <div className="chat-tab">
-        <ChatForum 
-          classId={selectedClass._id} 
-          currentUser={{
-            id: user._id,
-            role: selectedClass.userRole,
-            name: user.name
-          }}
-        />
-      </div>
-    );
-  };
+ // ===== CHAT TAB RENDERER =====
+const renderChatTab = () => {
+  if (!selectedClass) return null;
+  
+  return (
+    <div className="chat-tab">
+      <ChatForum 
+        classId={selectedClass._id} 
+        currentUser={{
+          id: user._id,
+          role: selectedClass.userRole,
+          name: user.name,
+          email: user.email,
+          profileImage: user.profileImage // ✅ ADD THIS LINE
+        }}
+      />
+    </div>
+  );
+};
 
   // ===== COMPLETED EXAMS RENDERER =====
   const renderCompletedExams = () => {
@@ -1995,7 +1949,7 @@ export default function Dashboard() {
     );
   };
 
-  // ===== PEOPLE TAB RENDERER =====
+  // ===== PEOPLE TAB RENDERER - UPDATED =====
 const renderPeopleTab = () => {
   if (loadingPeople) {
     return <div className="loading">Loading people...</div>;
@@ -2023,7 +1977,22 @@ const renderPeopleTab = () => {
           {classPeople.teachers.map(teacher => (
             <div key={teacher._id} className="person-card teacher-card">
               <div className="person-avatar">
-                {teacher.name.charAt(0).toUpperCase()}
+                {teacher.profileImage ? (
+                  <img 
+                    src={teacher.profileImage} 
+                    alt={teacher.name}
+                    className="avatar-image"
+                    onError={(e) => {
+                      // Fallback to initials if image fails to load
+                      e.target.style.display = 'none';
+                      const fallback = e.target.nextSibling;
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div className={`avatar-fallback ${teacher.profileImage ? 'hidden' : ''}`}>
+                  {teacher.name.charAt(0).toUpperCase()}
+                </div>
               </div>
               <div className="person-info">
                 <div className="person-name">{teacher.name}</div>
@@ -2074,7 +2043,22 @@ const renderPeopleTab = () => {
                     </div>
                   )}
                   <div className="person-avatar">
-                    {student.name.charAt(0).toUpperCase()}
+                    {student.profileImage ? (
+                      <img 
+                        src={student.profileImage} 
+                        alt={student.name}
+                        className="avatar-image"
+                        onError={(e) => {
+                          // Fallback to initials if image fails to load
+                          e.target.style.display = 'none';
+                          const fallback = e.target.nextSibling;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div className={`avatar-fallback ${student.profileImage ? 'hidden' : ''}`}>
+                      {student.name.charAt(0).toUpperCase()}
+                    </div>
                   </div>
                   <div className="person-info">
                     <div className="person-name">
@@ -2083,7 +2067,7 @@ const renderPeopleTab = () => {
                     </div>
                     <div className="person-email">{student.email}</div>
                     <div className="person-meta">
-                      Joined {new Date(student.joinedAt).toLocaleDateString()}
+                      Joined {new Date(student.joinedAt || student.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                   {isTeacher && (
@@ -2782,89 +2766,22 @@ const renderPeopleTab = () => {
       <div className="classwork-tab">
         <div className="classwork-header-section">
           <div className="classwork-header">
+            {/* ✅ SIMPLIFIED: Direct Create Quiz/Exam Button */}
             {selectedClass?.userRole === "teacher" && (
-              <div className="create-dropdown-container" ref={createDropdownRef}>
+              <div className="create-btn-container">
                 <button 
-                  className="create-btn dropdown-trigger"
-                  onClick={() => setShowCreateDropdown(!showCreateDropdown)}
+                  className="create-btn"
+                  onClick={() => {
+                    if (selectedClass) {
+                      navigate(`/class/${selectedClass._id}/quiz/new`);
+                    } else {
+                      alert('Please select a class first');
+                    }
+                  }}
                 >
                   <FaPlus className="btn-icon" />
-                  Create
-                  <span className={`dropdown-arrow ${showCreateDropdown ? 'open' : ''}`}>
-                    <FaChevronDown />
-                  </span>
+                  Create Quiz/Exam
                 </button>
-                
-                {showCreateDropdown && (
-                  <div className="create-dropdown-menu">
-                    <div className="dropdown-item" onClick={() => handleCreateOption('assignment')}>
-                      <span className="dropdown-icon">📝</span>
-                      <div className="dropdown-content">
-                        <div className="dropdown-title">Assignment</div>
-                        <div className="dropdown-description">Create a new assignment for students</div>
-                      </div>
-                    </div>
-                    
-                    <div className="dropdown-item" onClick={() => handleCreateOption('quiz')}>
-                      <span className="dropdown-icon">❓</span>
-                      <div className="dropdown-content">
-                        <div className="dropdown-title">Quiz/Exam</div>
-                        <div className="dropdown-description">Create a quiz or test</div>
-                      </div>
-                    </div>
-                    
-                    <div className="dropdown-item" onClick={() => handleCreateOption('question')}>
-                      <span className="dropdown-icon">💬</span>
-                      <div className="dropdown-content">
-                        <div className="dropdown-title">Question</div>
-                        <div className="dropdown-description">Post a question for students</div>
-                      </div>
-                    </div>
-                    
-                    <div className="dropdown-item" onClick={() => handleCreateOption('material')}>
-                      <span className="dropdown-icon">📎</span>
-                      <div className="dropdown-content">
-                        <div className="dropdown-title">Material</div>
-                        <div className="dropdown-description">Share learning materials</div>
-                      </div>
-                    </div>
-                    
-                    <div className="dropdown-item" onClick={() => handleCreateOption('reuse')}>
-                      <span className="dropdown-icon">🔄</span>
-                      <div className="dropdown-content">
-                        <div className="dropdown-title">Reuse post</div>
-                        <div className="dropdown-description">Reuse a post from another class</div>
-                      </div>
-                    </div>
-                    
-                    <div className="dropdown-item" onClick={() => handleCreateOption('topic')}>
-                      <span className="dropdown-icon">📂</span>
-                      <div className="dropdown-content">
-                        <div className="dropdown-title">Topic</div>
-                        <div className="dropdown-description">Create a new topic</div>
-                      </div>
-                    </div>
-
-                    {classwork.some(item => item.type === 'quiz') && (
-                      <>
-                        <div className="dropdown-divider"></div>
-                        <div 
-                          className="dropdown-item delete-all" 
-                          onClick={() => handleCreateOption('delete-all')}
-                        >
-                          <span className="dropdown-icon">🗑️</span>
-                          <div className="dropdown-content">
-                            <div className="dropdown-title">Delete All Quizzes</div>
-                            <div className="dropdown-description">Remove all quizzes and forms from this class</div>
-                          </div>
-                          {deletingAll && (
-                            <div className="loading-spinner-small"></div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -3421,8 +3338,8 @@ const renderPeopleTab = () => {
           >
             <FaBars className="hamburger-icon" />
           </button>
-          <a href="/" className="logo">
-            <span>ProctorVision</span>
+          <a>
+            <h1><b>ProctorVision</b></h1>
           </a>
         </div>
 
@@ -3468,16 +3385,20 @@ const renderPeopleTab = () => {
             )}
           </div>
 
-          {/* USER PROFILE DROPDOWN */}
+          {/* ✅ UPDATED: USER PROFILE DROPDOWN WITH GOOGLE PROFILE PICTURE SUPPORT */}
           <div className="user-profile" ref={userDropdownRef}>
             <button 
               className="user-profile-btn"
               onClick={() => setShowUserDropdown(!showUserDropdown)}
             >
               <img 
-                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=203a43&color=fff`} 
+                src={user.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=203a43&color=fff`}
                 alt="User Avatar" 
-                className="user-avatar" 
+                className="user-avatar"
+                onError={(e) => {
+                  // Fallback to initials avatar if profile image fails to load
+                  e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=203a43&color=fff`;
+                }}
               />
             </button>
             {showUserDropdown && (
@@ -3487,6 +3408,17 @@ const renderPeopleTab = () => {
                     <div className="user-name">{user.name}</div>
                     <div className="user-email">{user.email}</div>
                     <div className="user-role">Role: {userRole}</div>
+                    {/* ✅ ADD PROFILE IMAGE PREVIEW */}
+                    {user.profileImage && (
+                      <div className="profile-image-preview">
+                        <img 
+                          src={user.profileImage} 
+                          alt="Profile" 
+                          className="preview-image"
+                        />
+                        <span>Google Profile</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <ul className="user-dropdown-menu">

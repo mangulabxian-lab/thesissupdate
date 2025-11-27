@@ -355,7 +355,7 @@ router.get('/api/auth/google', (req, res, next) => {
 });
 
 // ========================
-// ✅ GOOGLE CALLBACK WITH ROLE INITIALIZATION
+// ✅ GOOGLE CALLBACK WITH PROFILE IMAGE SUPPORT
 // ========================
 
 const handleGoogleCallback = (req, res, next) => {
@@ -372,13 +372,19 @@ const handleGoogleCallback = (req, res, next) => {
       return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=Authentication failed. Please register first.`);
     }
     
+    // ✅ ADD GOOGLE PROFILE PICTURE TO USER MODEL
+    if (req.user && req.user.photos && req.user.photos.length > 0) {
+      user.profileImage = req.user.photos[0].value;
+      console.log('🖼️ Google profile picture saved:', user.profileImage);
+    }
+    
     if (!user.hasSelectedRole) {
       console.log('🆕 Initializing role fields for Google OAuth user');
       user.role = null;
       user.hasSelectedRole = false;
-      await user.save();
     }
     
+    await user.save();
     req.user = user;
     next();
   })(req, res, next);
@@ -677,7 +683,7 @@ router.post("/login", checkRegisteredEmail, async (req, res) => {
 });
 
 // ========================
-// ✅ IMPROVED GET CURRENT USER WITH ROLE INFO (THEME REMOVED)
+// ✅ IMPROVED GET CURRENT USER WITH PROFILE IMAGE & ROLE INFO
 // ========================
 
 router.get("/me", auth, async (req, res) => {
@@ -699,6 +705,7 @@ router.get("/me", auth, async (req, res) => {
       name: user.name,
       email: user.email,
       username: user.username,
+      profileImage: user.profileImage, // ✅ ADDED PROFILE IMAGE FIELD
       isVerified: user.isVerified,
       role: userRole,
       hasSelectedRole: user.hasSelectedRole,

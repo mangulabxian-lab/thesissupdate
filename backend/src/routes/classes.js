@@ -123,8 +123,8 @@ router.get("/my-classes", authMiddleware, async (req, res) => {
       ],
       isArchived: false
     })
-    .populate("ownerId", "name email")
-    .populate("members.userId", "name email")
+    .populate("ownerId", "name email profileImage") // ✅ ADD PROFILE IMAGE
+    .populate("members.userId", "name email profileImage") // ✅ ADD PROFILE IMAGE
     .sort({ createdAt: -1 });
 
     console.log(`✅ Found ${classes.length} classes`);
@@ -182,8 +182,8 @@ router.get("/my-classes", authMiddleware, async (req, res) => {
 router.get("/:classId", authMiddleware, checkClassAccess, async (req, res) => {
   try {
     const classData = await Class.findById(req.params.classId)
-      .populate("ownerId", "name email")
-      .populate("members.userId", "name email")
+      .populate("ownerId", "name email profileImage") // ✅ ADD PROFILE IMAGE
+      .populate("members.userId", "name email profileImage") // ✅ ADD PROFILE IMAGE
       .populate("exams");
 
     res.json({
@@ -203,12 +203,12 @@ router.get("/:classId", authMiddleware, checkClassAccess, async (req, res) => {
   }
 });
 
-// ✅ Get class members
+// ✅ GET CLASS MEMBERS WITH PROFILE IMAGES - UPDATED
 router.get("/:classId/members", authMiddleware, checkClassAccess, async (req, res) => {
   try {
     const classData = await Class.findById(req.params.classId)
-      .populate("ownerId", "name email")
-      .populate("members.userId", "name email");
+      .populate("ownerId", "name email profileImage") // ✅ ADD PROFILE IMAGE
+      .populate("members.userId", "name email profileImage"); // ✅ ADD PROFILE IMAGE
 
     const members = classData.members.map(member => ({
       ...member.userId._doc,
@@ -414,8 +414,8 @@ router.get("/archived", authMiddleware, async (req, res) => {
         { "members.userId": userId, isArchived: true }
       ]
     })
-    .populate("ownerId", "name email")
-    .populate("members.userId", "name email")
+    .populate("ownerId", "name email profileImage") // ✅ ADD PROFILE IMAGE
+    .populate("members.userId", "name email profileImage") // ✅ ADD PROFILE IMAGE
     .sort({ archivedAt: -1 });
 
     res.json({

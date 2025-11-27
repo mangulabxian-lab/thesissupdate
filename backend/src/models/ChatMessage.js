@@ -1,4 +1,3 @@
-//ChatMeassge.js
 const mongoose = require("mongoose");
 
 const chatMessageSchema = new mongoose.Schema({
@@ -14,6 +13,7 @@ const chatMessageSchema = new mongoose.Schema({
   },
   userName: { type: String, required: true },
   userRole: { type: String, enum: ["teacher", "student"], required: true },
+  profileImage: { type: String }, // ✅ ADDED: Store profile image
   message: { type: String, required: true },
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date },
@@ -21,6 +21,7 @@ const chatMessageSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     userName: { type: String },
     userRole: { type: String, enum: ["teacher", "student"] },
+    profileImage: { type: String }, // ✅ ADDED: For replies too
     message: { type: String },
     createdAt: { type: Date, default: Date.now }
   }]

@@ -3,6 +3,49 @@ import { useState, useEffect } from 'react';
 import { FaEllipsisV, FaEnvelope, FaUserMinus, FaVolumeMute, FaVolumeUp } from 'react-icons/fa';
 import './PeopleTab.css';
 
+// ✅ UPDATED AVATAR COMPONENT
+const PersonAvatar = ({ user, size = 40 }) => {
+  const getAvatarUrl = (user) => {
+    // ✅ PRIORITIZE GOOGLE PROFILE IMAGE
+    if (user.profileImage) {
+      return user.profileImage;
+    }
+    // Fallback to avatar if exists
+    if (user.avatar) {
+      return user.avatar;
+    }
+    // Final fallback to initials
+    return null;
+  };
+
+  const avatarUrl = getAvatarUrl(user);
+  const initials = user.name ? user.name.charAt(0).toUpperCase() : '?';
+
+  return (
+    <div 
+      className="person-avatar" 
+      style={{ width: size, height: size }}
+    >
+      {avatarUrl ? (
+        <img 
+          src={avatarUrl} 
+          alt={user.name}
+          className="avatar-image"
+          onError={(e) => {
+            // If image fails to load, show initials
+            e.target.style.display = 'none';
+            const fallback = e.target.parentNode.querySelector('.avatar-fallback');
+            if (fallback) fallback.style.display = 'flex';
+          }}
+        />
+      ) : null}
+      <div className={`avatar-fallback ${avatarUrl ? 'hidden' : ''}`}>
+        {initials}
+      </div>
+    </div>
+  );
+};
+
 const PeopleTab = ({ classId }) => {
   const [peopleData, setPeopleData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -26,9 +69,9 @@ const PeopleTab = ({ classId }) => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         setPeopleData(result.data);
       } else {
@@ -65,7 +108,7 @@ const PeopleTab = ({ classId }) => {
 
       if (result.success) {
         alert('Student removed successfully');
-        fetchPeopleData(); // Refresh data
+        fetchPeopleData();
       } else {
         alert('Failed to remove student: ' + result.message);
       }
@@ -90,7 +133,7 @@ const PeopleTab = ({ classId }) => {
 
       if (result.success) {
         alert(`Student ${isCurrentlyMuted ? 'unmuted' : 'muted'} successfully`);
-        fetchPeopleData(); // Refresh data
+        fetchPeopleData();
       } else {
         alert('Failed to update student: ' + result.message);
       }
@@ -138,8 +181,8 @@ const PeopleTab = ({ classId }) => {
   };
 
   const toggleStudentSelection = (studentId) => {
-    setSelectedStudents(prev => 
-      prev.includes(studentId) 
+    setSelectedStudents(prev =>
+      prev.includes(studentId)
         ? prev.filter(id => id !== studentId)
         : [...prev, studentId]
     );
@@ -165,9 +208,8 @@ const PeopleTab = ({ classId }) => {
         <div className="people-list">
           {peopleData.teachers.map(teacher => (
             <div key={teacher._id} className="person-card teacher-card">
-              <div className="person-avatar">
-                {teacher.name.charAt(0).toUpperCase()}
-              </div>
+              {/* ✅ UPDATED: Using PersonAvatar component */}
+              <PersonAvatar user={teacher} size={44} />
               <div className="person-info">
                 <div className="person-name">{teacher.name}</div>
                 <div className="person-email">{teacher.email}</div>
@@ -184,7 +226,7 @@ const PeopleTab = ({ classId }) => {
           <h3 className="section-title">Students ({peopleData.students.length})</h3>
           {peopleData.students.length > 0 && (
             <div className="bulk-actions">
-              <button 
+              <button
                 className="bulk-action-btn"
                 onClick={() => setShowEmailModal(true)}
               >
@@ -196,7 +238,6 @@ const PeopleTab = ({ classId }) => {
 
         {peopleData.students.length > 0 ? (
           <div className="students-container">
-            {/* Bulk Selection Header */}
             <div className="bulk-selection-header">
               <label className="checkbox-label">
                 <input
@@ -211,7 +252,6 @@ const PeopleTab = ({ classId }) => {
               </span>
             </div>
 
-            {/* Students List */}
             <div className="people-list">
               {peopleData.students.map(student => (
                 <div key={student._id} className="person-card student-card">
@@ -222,9 +262,10 @@ const PeopleTab = ({ classId }) => {
                       onChange={() => toggleStudentSelection(student._id)}
                     />
                   </div>
-                  <div className="person-avatar">
-                    {student.name.charAt(0).toUpperCase()}
-                  </div>
+
+                  {/* ✅ UPDATED: Using PersonAvatar component */}
+                  <PersonAvatar user={student} size={44} />
+
                   <div className="person-info">
                     <div className="person-name">
                       {student.name}
@@ -235,24 +276,25 @@ const PeopleTab = ({ classId }) => {
                       Joined {new Date(student.joinedAt).toLocaleDateString()}
                     </div>
                   </div>
+
                   <div className="person-actions">
-                    <button 
+                    <button
                       className="actions-toggle"
                       onClick={() => toggleActions(student._id)}
                     >
                       <FaEllipsisV />
                     </button>
-                    
+
                     {activeActions === student._id && (
                       <div className="actions-dropdown">
-                        <button 
+                        <button
                           className="action-item"
                           onClick={() => handleToggleMute(student._id, student.name, student.isMuted)}
                         >
                           {student.isMuted ? <FaVolumeUp /> : <FaVolumeMute />}
                           {student.isMuted ? 'Unmute' : 'Mute'} Student
                         </button>
-                        <button 
+                        <button
                           className="action-item remove"
                           onClick={() => handleRemoveStudent(student._id, student.name)}
                         >
@@ -281,7 +323,7 @@ const PeopleTab = ({ classId }) => {
           <div className="modal-content">
             <div className="modal-header">
               <h3>Email Students</h3>
-              <button 
+              <button
                 className="close-btn"
                 onClick={() => setShowEmailModal(false)}
               >
@@ -310,13 +352,13 @@ const PeopleTab = ({ classId }) => {
               </div>
             </div>
             <div className="modal-actions">
-              <button 
+              <button
                 className="btn-secondary"
                 onClick={() => setShowEmailModal(false)}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 className="btn-primary"
                 onClick={handleEmailStudents}
                 disabled={!emailData.subject.trim() || !emailData.message.trim()}

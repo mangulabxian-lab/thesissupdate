@@ -272,6 +272,47 @@ io.on("connection", (socket) => {
     }
   });
 
+
+
+
+// Sa server.js, tiyakin na tama ang proctoring alert handler:
+socket.on('proctoring-alert', (data) => {
+  console.log('🚨 Received proctoring alert from student:', data);
+  
+  // Multiple ways to get examId
+  const examId = data.examId || 
+                (data.roomId ? data.roomId.replace('exam-', '') : null) ||
+                (socket.rooms ? Array.from(socket.rooms).find(room => room.startsWith('exam-'))?.replace('exam-', '') : null);
+  
+  if (examId) {
+    console.log(`📤 Forwarding alert to exam room: exam-${examId}`);
+    
+    // ✅ CRITICAL: Include studentSocketId in the forwarded data
+    const alertData = {
+      ...data,
+      studentSocketId: data.studentSocketId || socket.id, // Ensure studentSocketId is included
+      examId: examId,
+      timestamp: new Date().toISOString(),
+      forwardedAt: Date.now()
+    };
+    
+    // Forward to teacher room with enhanced data
+    io.to(`exam-${examId}`).emit('proctoring-alert', alertData);
+    
+    console.log(`✅ Alert forwarded successfully to exam-${examId}:`, alertData);
+  } else {
+    console.error('❌ No examId found in proctoring alert. Data:', data);
+    console.log('📋 Available rooms:', socket.rooms);
+  }
+});
+
+// ✅ DAGDAG - STUDENT VIOLATION ALERTS
+socket.on('student-violation', (data) => {
+  console.log('⚠️ Student violation:', data);
+  if (data.examId) {
+    io.to(`exam-${data.examId}`).emit('student-violation', data);
+  }
+});
   socket.on("delete-chat-message", async (data) => {
     try {
       const { messageId, classId } = data;
@@ -360,22 +401,7 @@ io.on("connection", (socket) => {
     console.log(`💬 User ${socket.userName} left class chat: ${classId}`);
   });
 
-  // ===== TIMER SYNC HANDLERS =====
-  socket.on('student-time-request', (data) => {
-    console.log('🕒 Student requesting current time:', data.studentSocketId);
-    
-    // Get current room and send time
-    if (currentRoom && examRooms.has(currentRoom)) {
-      const room = examRooms.get(currentRoom);
-      if (room.teacher) {
-        // Forward request to teacher
-        socket.to(room.teacher).emit('student-time-request', {
-          studentSocketId: data.studentSocketId,
-          roomId: currentRoom
-        });
-      }
-    }
-  });
+  
 
   // ===== EXAM START/END HANDLERS =====
   socket.on('exam-started', (data) => {
@@ -439,21 +465,34 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Teacher sending time to specific student
-  socket.on('send-current-time', (data) => {
-    console.log('🕒 Teacher sending time to student:', data.studentSocketId);
-    socket.to(data.studentSocketId).emit('send-current-time', {
-      timeLeft: data.timeLeft,
-      isTimerRunning: data.isTimerRunning
-    });
-  });
-
   // Broadcast timer updates to all students in room
   socket.on('exam-time-update', (data) => {
-    console.log('🕒 Broadcasting timer update to room:', data.roomId);
-    socket.to(data.roomId).emit('exam-time-update', data);
+  console.log('🕒 Broadcasting timer update to room:', {
+    roomId: data.roomId,
+    timeLeft: data.timeLeft,
+    isTimerRunning: data.isTimerRunning,
+    formatted: formatTime(data.timeLeft)
   });
+  
+  // ✅ BROADCAST TO ALL STUDENTS IN ROOM (REAL-TIME)
+  socket.to(data.roomId).emit('exam-time-update', data);
+});
 
+
+// Add this utility function to server.js
+const formatTime = (seconds) => {
+  if (seconds === null || seconds === undefined) return '00:00';
+  
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  if (hrs > 0) {
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  } else {
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+};
   // ===== DETECTION SETTINGS HANDLER =====
   socket.on('update-detection-settings', (data) => {
     console.log('🎯 Teacher updating detection settings for student:', data.studentSocketId);
@@ -494,7 +533,7 @@ io.on("connection", (socket) => {
         // Send current time to all students when teacher joins
         setTimeout(() => {
           socket.to(roomId).emit('exam-time-update', {
-            timeLeft: 3600, // Default 1 hour
+            timeLeft: 10, // Default 1 hour
             isTimerRunning: false,
             roomId: roomId,
             timestamp: Date.now(),

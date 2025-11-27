@@ -1,4 +1,4 @@
-// models/Assignment.js
+// models/Assignment.js - UPDATED WITH COMPLETION TRACKING
 const mongoose = require("mongoose");
 
 const assignmentSchema = new mongoose.Schema({
@@ -15,6 +15,26 @@ const assignmentSchema = new mongoose.Schema({
   // Assignment-specific fields
   dueDate: { type: Date },
   points: { type: Number },
+  
+  // ✅ COMPLETION TRACKING FOR ASSIGNMENTS
+  completedBy: [{
+    studentId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "User", 
+      required: true 
+    },
+    completedAt: { 
+      type: Date, 
+      default: Date.now 
+    },
+    submittedWork: String, // File URL or text submission
+    grade: Number,
+    feedback: String,
+    submittedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   
   // Quiz-specific fields
   questions: [{
@@ -45,5 +65,12 @@ assignmentSchema.pre("save", function(next) {
   this.updatedAt = Date.now();
   next();
 });
+
+// ✅ Method to check if student has completed the assignment
+assignmentSchema.methods.hasStudentCompleted = function(studentId) {
+  return this.completedBy.some(completion => 
+    completion.studentId.toString() === studentId.toString()
+  );
+};
 
 module.exports = mongoose.models.Assignment || mongoose.model("Assignment", assignmentSchema);

@@ -152,6 +152,22 @@ export const getExamDetails = async (examId) => {
   return response.data;
 };
 
+// ===== COMPLETION TRACKING API =====
+export const markExamAsCompleted = async (examId, completionData) => {
+  const response = await api.post(`/exams/${examId}/complete`, completionData);
+  return response.data;
+};
+
+export const getCompletedExams = async () => {
+  const response = await api.get('/exams/student/completed');
+  return response.data;
+};
+
+export const getExamCompletionStatus = async (examId) => {
+  const response = await api.get(`/exams/${examId}/completion-status`);
+  return response.data;
+};
+
 // ===== STUDENT QUIZ =====
 export const getQuizForStudent = async (examId) => {
   try {

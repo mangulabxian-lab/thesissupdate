@@ -1,40 +1,66 @@
-//chatRoutes.js
 const express = require("express");
 const router = express.Router();
 const ChatMessage = require("../models/ChatMessage");
 const Class = require("../models/Class");
+const User = require("../models/User");
 const authMiddleware = require("../middleware/authMiddleware");
-const { checkClassAccess } = require("../middleware/classAuth");
 
 // Get chat messages for a class
-router.get("/:classId/messages", authMiddleware, checkClassAccess, async (req, res) => {
+router.get("/:classId/messages", authMiddleware, async (req, res) => {
   try {
     const { classId } = req.params;
-    const { page = 1, limit = 50 } = req.query;
+    const { limit = 100 } = req.query;
+
+    console.log('📨 Fetching messages for class:', classId);
+
+    // Check if user has access to this class
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Class not found" 
+      });
+    }
+
+    const isMember = classData.ownerId.toString() === req.user.id || 
+                    classData.members.some(m => m.userId.toString() === req.user.id);
+    
+    if (!isMember) {
+      return res.status(403).json({ 
+        success: false,
+        message: "Access denied" 
+      });
+    }
 
     const messages = await ChatMessage.find({ 
       classId, 
       isDeleted: false 
     })
-      .populate("userId", "name email")
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .populate({
+        path: "userId",
+        select: "name email profileImage role",
+        model: "User"
+      })
+      .sort({ createdAt: 1 })
+      .limit(parseInt(limit));
 
-    // Get total count for pagination
-    const total = await ChatMessage.countDocuments({ 
-      classId, 
-      isDeleted: false 
+    console.log(`✅ Found ${messages.length} messages for class ${classId}`);
+    
+    // ✅ DEBUG: Check if profile images are being populated for ALL users
+    messages.forEach((msg, index) => {
+      console.log(`👤 Message ${index + 1}:`, {
+        userName: msg.userName,
+        userId: msg.userId?._id,
+        profileImage: msg.profileImage,
+        populatedProfileImage: msg.userId?.profileImage,
+        hasUserId: !!msg.userId
+      });
     });
 
     res.json({
       success: true,
-      data: messages.reverse(), // Return in chronological order
-      pagination: {
-        current: page,
-        total: Math.ceil(total / limit),
-        totalMessages: total
-      }
+      data: messages,
+      total: messages.length
     });
   } catch (err) {
     console.error("❌ Get chat messages error:", err);
@@ -45,12 +71,14 @@ router.get("/:classId/messages", authMiddleware, checkClassAccess, async (req, r
   }
 });
 
-// Send a new message
-router.post("/:classId/messages", authMiddleware, checkClassAccess, async (req, res) => {
+// Send a new message (REST API fallback)
+router.post("/:classId/messages", authMiddleware, async (req, res) => {
   try {
     const { classId } = req.params;
     const { message } = req.body;
     const userId = req.user.id;
+
+    console.log('💬 REST API message send:', { classId, message, userId });
 
     if (!message || message.trim() === "") {
       return res.status(400).json({ 
@@ -59,37 +87,71 @@ router.post("/:classId/messages", authMiddleware, checkClassAccess, async (req, 
       });
     }
 
-    // Get user info from class members
-    const classData = await Class.findById(classId)
-      .populate("ownerId", "name")
-      .populate("members.userId", "name");
-
-    let userName = req.user.name;
-    let userRole = "student";
-
-    // Check if user is teacher (owner)
-    if (classData.ownerId._id.toString() === userId) {
-      userRole = "teacher";
-    } else {
-      // Check if user is a member with teacher role
-      const member = classData.members.find(m => 
-        m.userId._id.toString() === userId && m.role === "teacher"
-      );
-      if (member) {
-        userRole = "teacher";
-      }
+    // Check class access
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Class not found" 
+      });
     }
 
+    const isMember = classData.ownerId.toString() === userId || 
+                    classData.members.some(m => m.userId.toString() === userId);
+    
+    if (!isMember) {
+      return res.status(403).json({ 
+        success: false,
+        message: "Access denied" 
+      });
+    }
+
+    // Determine user role
+    let userRole = "student";
+    if (classData.ownerId.toString() === userId) {
+      userRole = "teacher";
+    } else {
+      const member = classData.members.find(m => 
+        m.userId.toString() === userId && m.role === "teacher"
+      );
+      if (member) userRole = "teacher";
+    }
+
+    // ✅ FIXED: Get fresh user data with profile image from database
+    const userWithProfile = await User.findById(userId).select('name email profileImage role');
+    
+    if (!userWithProfile) {
+      return res.status(404).json({ 
+        success: false,
+        message: "User not found" 
+      });
+    }
+
+    console.log('🖼️ User profile data from DB:', {
+      name: userWithProfile.name,
+      profileImage: userWithProfile.profileImage,
+      role: userWithProfile.role
+    });
+
+    // Create message with guaranteed profile image
     const newMessage = await ChatMessage.create({
       classId,
       userId,
-      userName,
+      userName: userWithProfile.name,
       userRole,
+      profileImage: userWithProfile.profileImage,
       message: message.trim()
     });
 
     const populatedMessage = await ChatMessage.findById(newMessage._id)
-      .populate("userId", "name email");
+      .populate("userId", "name email profileImage role");
+
+    console.log('✅ Message created via REST API:', {
+      id: populatedMessage._id,
+      userName: populatedMessage.userName,
+      profileImage: populatedMessage.profileImage,
+      userRole: populatedMessage.userRole
+    });
 
     res.status(201).json({
       success: true,
@@ -105,7 +167,7 @@ router.post("/:classId/messages", authMiddleware, checkClassAccess, async (req, 
   }
 });
 
-// Delete a message (soft delete)
+// Delete a message
 router.delete("/messages/:messageId", authMiddleware, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -120,7 +182,7 @@ router.delete("/messages/:messageId", authMiddleware, async (req, res) => {
       });
     }
 
-    // Check if user owns the message or is a teacher in the class
+    // Check permissions
     const classData = await Class.findById(message.classId);
     const isTeacher = classData.ownerId.toString() === userId || 
                      classData.members.some(m => 
@@ -148,73 +210,6 @@ router.delete("/messages/:messageId", authMiddleware, async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: "Failed to delete message" 
-    });
-  }
-});
-
-// Add reply to a message
-router.post("/messages/:messageId/reply", authMiddleware, async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const { message } = req.body;
-    const userId = req.user.id;
-
-    if (!message || message.trim() === "") {
-      return res.status(400).json({ 
-        success: false,
-        message: "Reply cannot be empty" 
-      });
-    }
-
-    const parentMessage = await ChatMessage.findById(messageId);
-    
-    if (!parentMessage) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Message not found" 
-      });
-    }
-
-    // Get user info
-    const classData = await Class.findById(parentMessage.classId)
-      .populate("ownerId", "name")
-      .populate("members.userId", "name");
-
-    let userName = req.user.name;
-    let userRole = "student";
-
-    if (classData.ownerId._id.toString() === userId) {
-      userRole = "teacher";
-    } else {
-      const member = classData.members.find(m => 
-        m.userId._id.toString() === userId && m.role === "teacher"
-      );
-      if (member) {
-        userRole = "teacher";
-      }
-    }
-
-    const reply = {
-      userId,
-      userName,
-      userRole,
-      message: message.trim(),
-      createdAt: new Date()
-    };
-
-    parentMessage.replies.push(reply);
-    await parentMessage.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Reply added successfully",
-      data: reply
-    });
-  } catch (err) {
-    console.error("❌ Add reply error:", err);
-    res.status(500).json({ 
-      success: false,
-      message: "Failed to add reply" 
     });
   }
 });

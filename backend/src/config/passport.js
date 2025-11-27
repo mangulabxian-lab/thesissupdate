@@ -1,4 +1,4 @@
-// config/passport.js - UPDATED WITH DEBUG LOGGING
+// config/passport.js - UPDATED WITH PROFILE PICTURE SUPPORT
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const User = require("../models/user");
@@ -38,6 +38,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       console.log('🔍 Google OAuth Profile Received - ID:', profile.id);
       console.log('📧 Email from Google:', profile.emails[0].value);
       console.log('👤 Name from Google:', profile.displayName);
+      console.log('🖼️ Profile Picture:', profile.photos?.[0]?.value);
       
       // 🚫 CRITICAL FIX: Only allow Gmail accounts
       if (!profile.emails[0].value.endsWith('@gmail.com')) {
@@ -50,6 +51,15 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       let user = await User.findOne({ googleId: profile.id });
       if (user) {
         console.log('✅ ALLOWED: Existing Google user found:', user.email);
+        
+        // ✅ UPDATE: Check if profile picture needs updating
+        const googleProfilePicture = profile.photos?.[0]?.value;
+        if (googleProfilePicture && user.profileImage !== googleProfilePicture) {
+          user.profileImage = googleProfilePicture;
+          await user.save();
+          console.log('✅ Updated profile picture from Google');
+        }
+        
         console.log('🔄 ========== GOOGLE OAUTH END ==========');
         return done(null, user);
       }
@@ -59,9 +69,18 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       user = await User.findOne({ email: profile.emails[0].value });
       if (user) {
         console.log('✅ ALLOWED: Existing registered user found:', user.email);
-        // Link Google ID to existing user
+        
+        // Link Google ID to existing user AND save profile picture
         console.log('🔗 Linking Google ID to existing user');
         user.googleId = profile.id;
+        
+        // ✅ ADDED: Save Google profile picture
+        const googleProfilePicture = profile.photos?.[0]?.value;
+        if (googleProfilePicture) {
+          user.profileImage = googleProfilePicture;
+          console.log('✅ Saved Google profile picture');
+        }
+        
         await user.save();
         console.log('🔄 ========== GOOGLE OAUTH END ==========');
         return done(null, user);

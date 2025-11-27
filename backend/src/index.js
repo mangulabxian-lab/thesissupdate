@@ -177,53 +177,100 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ✅ ADDED: Main class chat message handler
+  socket.on("send-chat-message", async (data) => {
+    try {
+      const { classId, message } = data;
+      
+      if (!message || !message.trim()) {
+        return;
+      }
 
+      // Save to database
+      const chatMessage = new ChatMessage({
+        classId,
+        userId: socket.userId,
+        userName: socket.userName,
+        userRole: socket.userRole,
+        message: message.trim()
+      });
 
+      await chatMessage.save();
+      
+      // Populate user data for response
+      await chatMessage.populate("userId", "name email");
 
-// ✅ ADD THIS NEW HANDLER FOR EXAM CHAT (after the class chat handlers)
-socket.on("send-exam-chat-message", async (data) => {
-  try {
-    console.log('💬 Received exam chat message:', data);
-    
-    const { roomId, message } = data;
-    
-    // ✅ SAFELY EXTRACT MESSAGE TEXT
-    let messageText;
-    if (typeof message === 'object' && message.text) {
-      messageText = message.text;
-    } else if (typeof message === 'string') {
-      messageText = message;
-    } else {
-      console.error('❌ Invalid message format in exam chat:', message);
-      return;
+      // Broadcast to all users in the class chat room
+      const messageData = {
+        _id: chatMessage._id,
+        classId: chatMessage.classId,
+        userId: {
+          _id: chatMessage.userId._id,
+          name: chatMessage.userId.name,
+          email: chatMessage.userId.email
+        },
+        userName: chatMessage.userName,
+        userRole: chatMessage.userRole,
+        message: chatMessage.message,
+        replies: chatMessage.replies || [],
+        createdAt: chatMessage.createdAt,
+        updatedAt: chatMessage.updatedAt
+      };
+
+      io.to(`class-chat-${classId}`).emit("new-chat-message", messageData);
+      
+      console.log(`💬 New chat message in class ${classId} from ${socket.userName}`);
+
+    } catch (error) {
+      console.error('❌ Error sending chat message:', error);
+      socket.emit("chat-error", { message: "Failed to send message" });
     }
-    
-    if (!messageText || !messageText.trim()) {
-      return;
+  });
+
+  // ✅ ADD THIS NEW HANDLER FOR EXAM CHAT (after the class chat handlers)
+  socket.on("send-exam-chat-message", async (data) => {
+    try {
+      console.log('💬 Received exam chat message:', data);
+      
+      const { roomId, message } = data;
+      
+      // ✅ SAFELY EXTRACT MESSAGE TEXT
+      let messageText;
+      if (typeof message === 'object' && message.text) {
+        messageText = message.text;
+      } else if (typeof message === 'string') {
+        messageText = message;
+      } else {
+        console.error('❌ Invalid message format in exam chat:', message);
+        return;
+      }
+      
+      if (!messageText || !messageText.trim()) {
+        return;
+      }
+
+      const messageData = {
+        id: message.id || Date.now().toString(),
+        text: messageText.trim(),
+        sender: message.sender || socket.userRole,
+        senderName: message.senderName || socket.userName,
+        timestamp: message.timestamp || new Date(),
+        type: message.type || socket.userRole
+      };
+
+      // ✅ BROADCAST TO EXAM ROOM
+      io.to(roomId).emit("chat-message", {
+        message: messageData,
+        userName: socket.userName,
+        userRole: socket.userRole
+      });
+
+      console.log(`💬 Exam chat broadcast to ${roomId}:`, messageData);
+
+    } catch (error) {
+      console.error('❌ Error in exam chat:', error);
     }
-
-    const messageData = {
-      id: message.id || Date.now().toString(),
-      text: messageText.trim(),
-      sender: message.sender || socket.userRole,
-      senderName: message.senderName || socket.userName,
-      timestamp: message.timestamp || new Date(),
-      type: message.type || socket.userRole
-    };
-
-    // ✅ BROADCAST TO EXAM ROOM
-    io.to(roomId).emit("chat-message", {
-      message: messageData,
-      userName: socket.userName,
-      userRole: socket.userRole
-    });
-
-    console.log(`💬 Exam chat broadcast to ${roomId}:`, messageData);
-
-  } catch (error) {
-    console.error('❌ Error in exam chat:', error);
-  }
-});
+  });
 
   socket.on("delete-chat-message", async (data) => {
     try {

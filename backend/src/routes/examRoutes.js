@@ -425,6 +425,165 @@ router.get("/:examId/joined-students", async (req, res) => {
   }
 });
 
+// ===== COMPLETION TRACKING ROUTES =====
+
+// ✅ MARK EXAM AS COMPLETED
+router.post("/:examId/complete", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const studentId = req.user.id;
+    const { score, maxScore, percentage, answers } = req.body;
+
+    console.log("🎯 MARKING EXAM AS COMPLETED:", { examId, studentId, score });
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+
+    // Check if student already completed this exam
+    const alreadyCompleted = exam.completedBy.some(completion => 
+      completion.studentId.toString() === studentId
+    );
+
+    if (alreadyCompleted) {
+      return res.status(400).json({
+        success: false,
+        message: "You have already completed this exam"
+      });
+    }
+
+    // Add completion record
+    exam.completedBy.push({
+      studentId: studentId,
+      completedAt: new Date(),
+      score: score || 0,
+      maxScore: maxScore || exam.totalPoints,
+      percentage: percentage || 0,
+      answers: answers || [],
+      submittedAt: new Date()
+    });
+
+    await exam.save();
+
+    console.log("✅ Exam marked as completed for student:", studentId);
+
+    res.json({
+      success: true,
+      message: "Exam completed successfully",
+      data: {
+        examId: exam._id,
+        completed: true,
+        score: score,
+        percentage: percentage
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Mark exam complete error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark exam as completed"
+    });
+  }
+});
+
+// ✅ GET COMPLETED EXAMS FOR STUDENT
+router.get("/student/completed", async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    console.log("📋 GETTING COMPLETED EXAMS FOR STUDENT:", studentId);
+
+    // Find all exams that this student has completed
+    const exams = await Exam.find({
+      'completedBy.studentId': studentId
+    })
+    .populate('classId', 'name code')
+    .populate('createdBy', 'name')
+    .sort({ 'completedBy.submittedAt': -1 });
+
+    const completedExams = exams.map(exam => {
+      const completion = exam.completedBy.find(c => 
+        c.studentId.toString() === studentId
+      );
+      
+      return {
+        _id: exam._id,
+        title: exam.title,
+        description: exam.description,
+        classId: exam.classId,
+        className: exam.classId?.name,
+        classCode: exam.classId?.code,
+        teacherName: exam.createdBy?.name,
+        completedAt: completion?.completedAt,
+        submittedAt: completion?.submittedAt,
+        score: completion?.score,
+        maxScore: completion?.maxScore,
+        percentage: completion?.percentage,
+        type: "exam",
+        isQuiz: exam.isQuiz,
+        totalPoints: exam.totalPoints
+      };
+    });
+
+    console.log("✅ Found completed exams:", completedExams.length);
+
+    res.json({
+      success: true,
+      data: completedExams
+    });
+
+  } catch (err) {
+    console.error("❌ Get completed exams error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get completed exams"
+    });
+  }
+});
+
+// ✅ CHECK IF STUDENT HAS COMPLETED EXAM
+router.get("/:examId/completion-status", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const studentId = req.user.id;
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+
+    const hasCompleted = exam.completedBy.some(completion => 
+      completion.studentId.toString() === studentId
+    );
+    
+    const completionData = hasCompleted ? 
+      exam.completedBy.find(c => c.studentId.toString() === studentId) : null;
+
+    res.json({
+      success: true,
+      data: {
+        hasCompleted,
+        completion: completionData
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Get completion status error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get completion status"
+    });
+  }
+});
+
 // ===== CONTINUE WITH THE REST OF YOUR EXISTING ROUTES =====
 
 // ✅ GET EXAM FOR STUDENT TO TAKE
@@ -534,7 +693,7 @@ router.get("/take/:examId", async (req, res) => {
   }
 });
 
-// ✅ SUBMIT EXAM ANSWERS
+// ✅ UPDATED SUBMIT EXAM ANSWERS ROUTE TO AUTO-COMPLETE
 router.post("/:examId/submit", async (req, res) => {
   try {
     const { examId } = req.params;
@@ -578,18 +737,23 @@ router.post("/:examId/submit", async (req, res) => {
       });
     }
 
-    // Calculate score (basic implementation)
+    // Calculate score
     let score = 0;
     let maxScore = exam.totalPoints || exam.questions.reduce((sum, q) => sum + (q.points || 1), 0);
+    let detailedAnswers = [];
     
     exam.questions.forEach((question, index) => {
       const studentAnswer = answers[index];
+      let isCorrect = false;
+      let pointsEarned = 0;
       
       if (studentAnswer) {
         // Basic scoring logic
         if (question.type === 'multiple-choice' && question.correctAnswer !== undefined) {
           if (studentAnswer === question.options[question.correctAnswer]) {
             score += question.points || 1;
+            pointsEarned = question.points || 1;
+            isCorrect = true;
           }
         } else if (question.type === 'checkboxes' && question.correctAnswers) {
           // For checkboxes, check if all correct answers are selected
@@ -598,13 +762,43 @@ router.post("/:examId/submit", async (req, res) => {
                            correctOptions.length === studentAnswer.length;
           if (isCorrect) {
             score += question.points || 1;
+            pointsEarned = question.points || 1;
+            isCorrect = true;
           }
         }
         // For essay/short-answer questions, you might want manual grading
       }
+      
+      detailedAnswers.push({
+        questionIndex: index,
+        answer: studentAnswer,
+        isCorrect: isCorrect,
+        points: pointsEarned
+      });
     });
 
-    console.log("✅ Answers submitted. Score:", score, "/", maxScore);
+    const percentage = Math.round((score / maxScore) * 100);
+
+    console.log("✅ Answers submitted. Score:", score, "/", maxScore, "Percentage:", percentage + "%");
+
+    // ✅ AUTO-MARK AS COMPLETED
+    const alreadyCompleted = exam.completedBy.some(completion => 
+      completion.studentId.toString() === req.user.id
+    );
+
+    if (!alreadyCompleted) {
+      exam.completedBy.push({
+        studentId: req.user.id,
+        completedAt: new Date(),
+        score: score,
+        maxScore: maxScore,
+        percentage: percentage,
+        answers: detailedAnswers,
+        submittedAt: new Date()
+      });
+      await exam.save();
+      console.log("✅ Auto-marked exam as completed for student");
+    }
 
     res.json({
       success: true,
@@ -612,7 +806,8 @@ router.post("/:examId/submit", async (req, res) => {
       data: {
         score,
         maxScore,
-        percentage: Math.round((score / maxScore) * 100)
+        percentage,
+        completed: true
       }
     });
 
@@ -1211,7 +1406,11 @@ router.get("/health", (req, res) => {
       "POST /:examId/end",
       "POST /:examId/join",
       "GET /:examId/session-status",
-      "GET /:examId/joined-students"
+      "GET /:examId/joined-students",
+      // New completion tracking routes
+      "POST /:examId/complete",
+      "GET /student/completed", 
+      "GET /:examId/completion-status"
     ],
     timestamp: new Date().toISOString()
   });

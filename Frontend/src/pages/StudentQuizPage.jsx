@@ -1065,9 +1065,9 @@ export default function StudentQuizPage() {
   const [userRole] = useState('teacher');
 
   // ✅ TIMER STATE (SYNCED WITH TEACHER)
-  const [timeLeft, setTimeLeft] = useState(null);
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [timerInitialized, setTimerInitialized] = useState(false);
+const [timeLeft, setTimeLeft] = useState(null);
+const [isTimerRunning, setIsTimerRunning] = useState(false);
+const [timerInitialized, setTimerInitialized] = useState(false);
 
  // DAGDAGIN ito sa useState declarations:
 const [teacherDetectionSettings, setTeacherDetectionSettings] = useState({
@@ -1133,36 +1133,7 @@ const [studentAttempts, setStudentAttempts] = useState({
     navigate('/dashboard');
   }, [navigate]);
 
-  // ==================== CHAT FUNCTIONS ====================
-const handleSendMessage = (e) => {
-  e.preventDefault();
-  if (!newMessage.trim() || !socketRef.current) return;
-
-  // Generate a unique ID for this message
-  const messageId = `student-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
-  const messageData = {
-    id: messageId,
-    text: newMessage.trim(),
-    sender: 'student',
-    senderName: 'Student',
-    timestamp: new Date(),
-    type: 'student'
-  };
-
-  // Add to local messages immediately
-  setMessages(prev => [...prev, messageData]);
-  setNewMessage('');
-
-  // Send to teacher and other students
-  socketRef.current.emit('send-exam-chat-message', {
-    roomId: `exam-${examId}`,
-    message: messageData
-  });
-
-  console.log('📤 Student sent message:', messageData);
-};
-
+// ==================== CHAT FUNCTIONS ====================
 const handleChatMessage = useCallback((data) => {
   console.log('💬 Student received chat message:', data);
   
@@ -1171,29 +1142,18 @@ const handleChatMessage = useCallback((data) => {
     return;
   }
 
-  // Use the message ID from the data to prevent duplicates
-  const messageId = data.message.id;
+  const newMessage = {
+    id: data.message.id || Date.now().toString(),
+    text: data.message.text,
+    sender: data.message.sender,
+    senderName: data.message.senderName || 'Teacher',
+    timestamp: new Date(data.message.timestamp || Date.now()),
+    type: data.message.type || 'teacher'
+  };
+  
+  console.log('💾 Adding message to student state:', newMessage);
   
   setMessages(prev => {
-    // Check for duplicate message using the ID
-    const isDuplicate = prev.some(msg => msg.id === messageId);
-    
-    if (isDuplicate) {
-      console.log('🔄 Skipping duplicate message in student');
-      return prev;
-    }
-
-    const newMessage = {
-      id: messageId,
-      text: data.message.text,
-      sender: data.message.sender,
-      senderName: data.message.senderName || 'Teacher',
-      timestamp: new Date(data.message.timestamp),
-      type: data.message.type || 'teacher'
-    };
-    
-    console.log('💾 Adding message to student state:', newMessage);
-    
     const updatedMessages = [...prev, newMessage];
     console.log('📝 Student messages count:', updatedMessages.length);
     return updatedMessages;
@@ -1203,6 +1163,31 @@ const handleChatMessage = useCallback((data) => {
     setUnreadCount(prev => prev + 1);
   }
 }, [showChat]);
+
+const handleSendMessage = (e) => {
+  e.preventDefault();
+  if (!newMessage.trim() || !socketRef.current) return;
+
+  const messageData = {
+    id: Date.now().toString(),
+    text: newMessage.trim(),
+    sender: 'student',
+    senderName: 'Student',
+    timestamp: new Date(),
+    type: 'student'
+  };
+
+  // ✅ FIXED: Use consistent event name
+  socketRef.current.emit('send-chat-message', {
+    roomId: `exam-${examId}`,
+    message: messageData
+  });
+
+
+  setNewMessage('');
+
+  console.log('📤 Student sent message:', messageData);
+};
 
   const toggleChat = () => {
     setShowChat(prev => {
@@ -1335,19 +1320,24 @@ newSocket.on('student-violation', (data) => {
 
 // Sa useEffect ng socket setup, idagdag ang mga sumusunod:
 newSocket.on('exam-started', (data) => {
-  console.log('✅ Exam started by teacher:', data);
-  setExamStarted(true);
-  setPermissionsGranted(true);
-  if (requiresCamera) setCameraActive(true);
-  if (requiresMicrophone) setMicrophoneActive(true);
-  
-  // Load the quiz when exam starts
-  loadQuiz();
-});
+    console.log('✅ Exam started by teacher:', data);
+    setExamStarted(true);
+    setPermissionsGranted(true);
+    if (requiresCamera) setCameraActive(true);
+    if (requiresMicrophone) setMicrophoneActive(true);
+    
+    // Load the quiz when exam starts
+    loadQuiz();
+  });
 
 newSocket.on('exam-ended', (data) => {
   console.log('🛑 Exam ended by teacher:', data);
-  alert('❌ Exam has been ended by the teacher. You will be redirected.');
+  
+  // Auto-submit current answers
+  handleSubmitQuiz(true);
+  
+  alert('⏹️ Exam has been ended by the teacher. Your answers are being submitted.');
+
   
   // Clean up resources
   if (localStream) {
@@ -1363,9 +1353,25 @@ newSocket.on('exam-ended', (data) => {
   }, 3000);
 });
 
+// ✅ TEACHER DISCONNECT HANDLER
 newSocket.on('teacher-disconnect', (data) => {
   console.log('🔌 Disconnected by teacher:', data);
-  alert(`❌ You have been disconnected by the teacher. Reason: ${data.reason}`);
+  
+  // Clean up resources
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+  }
+  if (peerConnectionRef.current) {
+    peerConnectionRef.current.close();
+  }
+  
+  // Show message and redirect
+  alert(`❌ ${data.reason || 'You have been disconnected by the teacher.'}`);
+  
+  setTimeout(() => {
+    navigate('/dashboard');
+  }, 3000);
+
   
   // Clean up resources
   if (localStream) {
@@ -1381,28 +1387,70 @@ newSocket.on('teacher-disconnect', (data) => {
   }, 3000);
 });
 
+  newSocket.on('detection-settings-update', (data) => {
+    console.log('🎯 Received detection settings from teacher:', data);
+    
+    if (data.settings) {
+      setTeacherDetectionSettings(prev => ({
+        ...prev,
+        ...data.settings
+      }));
+      
+      console.log('✅ UPDATED DETECTION SETTINGS:', data.settings);
+      
+      const changedSettings = Object.entries(data.settings)
+        .map(([key, value]) => `${key}: ${value ? '✅ ON' : '❌ OFF'}`)
+        .join(', ');
+      
+      setProctoringAlerts(prev => [{
+        id: Date.now(),
+        message: `🎯 Teacher updated: ${changedSettings}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'info'
+      }, ...prev.slice(0, 4)]);
+      
+      if (socketRef.current) {
+        socketRef.current.emit('detection-settings-confirmation', {
+          teacherSocketId: data.from,
+          studentName: 'Student',
+          settings: data.settings,
+          receivedAt: new Date().toISOString()
+        });
+      }
+    }
+    
+    if (data.customMessage) {
+      setProctoringAlerts(prev => [{
+        id: Date.now() + 1,
+        message: `📝 Teacher: ${data.customMessage}`,
+        timestamp: new Date().toLocaleTimeString(),
+        type: 'info'
+      }, ...prev.slice(0, 4)]);
+    }
+  });
 
   // ✅ TIMER SYNC LISTENERS
-  newSocket.on('exam-time-update', (data) => {
-    console.log('🕒 Received timer update from teacher:', data);
+ newSocket.on('exam-time-update', (data) => {
+    console.log('🕒 Received timer update from teacher:', {
+      timeLeft: data.timeLeft,
+      isTimerRunning: data.isTimerRunning,
+      formatted: formatTime(data.timeLeft)
+    });
+    
+    // ✅ IMMEDIATELY UPDATE STUDENT TIMER
     setTimeLeft(data.timeLeft);
     setIsTimerRunning(data.isTimerRunning);
     setTimerInitialized(true);
   });
-
-  newSocket.on('send-current-time', (data) => {
-    console.log('🕒 Received current time from teacher:', data);
-    setTimeLeft(data.timeLeft);
-    setIsTimerRunning(data.isTimerRunning);
-    setTimerInitialized(true);
-  });
+  
 
   // Other existing event listeners...
   newSocket.on('camera-request', handleCameraRequest);
   newSocket.on('webrtc-answer', handleWebRTCAnswer);
   newSocket.on('ice-candidate', handleICECandidate);
   newSocket.on('proctoring-alert', handleProctoringAlert);
-  newSocket.on('chat-message', handleChatMessage)
+  newSocket.on('chat-message', handleChatMessage);
+
 
   socketRef.current = newSocket;
 
@@ -1417,21 +1465,22 @@ newSocket.on('teacher-disconnect', (data) => {
 
   // ==================== TIMER EFFECT ====================
   useEffect(() => {
-    if (timeLeft === null || !isTimerRunning) return;
+  if (timeLeft === null || !isTimerRunning) return;
 
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleSubmitQuiz();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  const timer = setInterval(() => {
+    setTimeLeft(prev => {
+      if (prev <= 1) {
+        clearInterval(timer);
+        // ✅ AUTO-SUBMIT WHEN TIME REACHES 0
+        handleSubmitQuiz(true); // true = auto-submit
+        return 0;
+      }
+      return prev - 1;
+    });
+  }, 1000);
 
-    return () => clearInterval(timer);
-  }, [timeLeft, isTimerRunning]);
+  return () => clearInterval(timer);
+}, [timeLeft, isTimerRunning]);
 
   // ==================== WEBRTC HANDLERS ====================
 const handleCameraRequest = async (data, isRetry = false) => {
@@ -1739,69 +1788,89 @@ const handleProctoringAlert = useCallback((alertData) => {
     handleAnswerChange(questionIndex, newAnswers);
   }, [answers, handleAnswerChange]);
 
-  // ==================== UPDATED SUBMIT QUIZ FUNCTION ====================
-  const handleSubmitQuiz = async () => {
+ const handleSubmitQuiz = async (isAutoSubmit = false) => {
+  // For auto-submit (timeout), don't show confirmation
+  if (!isAutoSubmit) {
     if (!window.confirm('Are you sure you want to submit your answers?')) return;
+  }
+  
+  // Camera and microphone check for exam mode
+  if ((requiresCamera && !cameraActive) || (requiresMicrophone && !microphoneActive)) {
+    const proceed = isAutoSubmit || window.confirm(
+      'Monitoring is not fully active. This may be reported to your instructor. Continue with submission?'
+    );
+    if (!proceed) return;
+  }
+
+  setSubmitting(true);
+  try {
+    console.log('📤 Submitting quiz answers...');
     
-    // Camera and microphone check for exam mode
-    if ((requiresCamera && !cameraActive) || (requiresMicrophone && !microphoneActive)) {
-      const proceed = window.confirm(
-        'Monitoring is not fully active. This may be reported to your instructor. Continue with submission?'
-      );
-      if (!proceed) return;
-    }
-
-    setSubmitting(true);
-    try {
-      // ✅ FIRST: Submit quiz answers
-      const submissionResponse = await submitQuizAnswers(examId, answers);
+    // ✅ FIRST: Submit quiz answers
+    const submissionResponse = await submitQuizAnswers(examId, answers);
+    
+    if (submissionResponse.success) {
+      console.log('✅ Quiz answers submitted successfully');
       
-      if (submissionResponse.success) {
-        // ✅ SECOND: MARK EXAM AS COMPLETED IN BACKEND
-        try {
-          await api.post(`/exams/${examId}/complete`, {
-            score: submissionResponse.data.score,
-            maxScore: submissionResponse.data.maxScore,
-            percentage: submissionResponse.data.percentage,
-            answers: Object.entries(answers).map(([index, answer]) => ({
-              questionIndex: parseInt(index),
-              answer: answer
-            }))
-          });
-          console.log("✅ Exam marked as completed in backend");
-        } catch (completionError) {
-          console.error("❌ Failed to mark exam as completed:", completionError);
-          // Continue anyway - the main submission was successful
-        }
+      // ✅ SECOND: MARK EXAM AS COMPLETED IN BACKEND
+      try {
+        await api.post(`/exams/${examId}/complete`, {
+          score: submissionResponse.data.score,
+          maxScore: submissionResponse.data.maxScore,
+          percentage: submissionResponse.data.percentage,
+          answers: Object.entries(answers).map(([index, answer]) => ({
+            questionIndex: parseInt(index),
+            answer: answer
+          }))
+        });
+        console.log("✅ Exam marked as completed in backend");
+      } catch (completionError) {
+        console.error("❌ Failed to mark exam as completed:", completionError);
+        // Continue anyway - the main submission was successful
+      }
 
+      // Show appropriate message
+      if (isAutoSubmit) {
+        alert('⏰ Time is up! Your answers have been automatically submitted.');
+      } else {
         alert('✅ Answers submitted successfully! Your exam has been moved to "Done" section.');
-        
-        // Clean up resources
-        if (localStream) {
-          localStream.getTracks().forEach(track => track.stop());
-        }
-        if (peerConnection) {
-          peerConnection.close();
-        }
-        
-        // ✅ NAVIGATE TO DASHBOARD WITH COMPLETION STATE
+      }
+      
+      // Clean up resources
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+      }
+      
+      // ✅ DISCONNECT SOCKET
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      
+      // ✅ NAVIGATE TO DASHBOARD WITH COMPLETION STATE
+      setTimeout(() => {
         navigate('/dashboard', { 
           state: { 
             examCompleted: true,
             examId: examId,
-            message: 'Quiz completed successfully!'
+            message: isAutoSubmit ? 'Time expired - Quiz auto-submitted' : 'Quiz completed successfully!'
           }
         });
-      } else {
-        throw new Error(submissionResponse.message || 'Submission failed');
-      }
-    } catch (error) {
-      console.error('Submission error:', error);
-      alert('❌ Failed to submit answers. Please check your connection and try again.');
-    } finally {
-      setSubmitting(false);
+      }, 2000);
+      
+    } else {
+      throw new Error(submissionResponse.message || 'Submission failed');
     }
-  };
+  } catch (error) {
+    console.error('Submission error:', error);
+    alert('❌ Failed to submit answers. Please check your connection and try again.');
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   // ==================== UTILITY FUNCTIONS ====================
   const formatTime = (seconds) => {
@@ -1829,7 +1898,7 @@ const handleProctoringAlert = useCallback((alertData) => {
   const progressPercentage = (answeredCount / (quiz?.questions?.length || 1)) * 100;
 
   // Show permission check first
-// ==================== WAITING ROOM LOGIC ====================
+  // Palitan ang existing na permission check logic:
 if (!examStarted) {
   return (
     <WaitingRoomComponent 
@@ -1846,8 +1915,6 @@ if (!examStarted) {
     />
   );
 }
-
-
 const logEvent = (eventName, data) => {
   console.log(`🎯 ${eventName} at ${new Date().toLocaleTimeString()}:`, data);
 };
@@ -2172,19 +2239,19 @@ if (permissionsGranted && !examStarted) {
             )}
           </div>
           <button 
-            className={`submit-quiz-btn ${answeredCount === 0 ? 'disabled' : ''}`}
-            onClick={handleSubmitQuiz}
-            disabled={submitting || answeredCount === 0}
-          >
-            {submitting ? (
-              <>
-                <div className="loading-spinner-small"></div>
-                Submitting...
-              </>
-            ) : (
-              `Submit Quiz ${answeredCount > 0 ? `(${answeredCount} answers)` : ''}`
-            )}
-          </button>
+  className={`submit-quiz-btn ${answeredCount === 0 ? 'disabled' : ''}`}
+  onClick={() => handleSubmitQuiz(false)} // false = manual submit
+  disabled={submitting || answeredCount === 0}
+>
+  {submitting ? (
+    <>
+      <div className="loading-spinner-small"></div>
+      Submitting...
+    </>
+  ) : (
+    `Submit Quiz ${answeredCount > 0 ? `(${answeredCount} answers)` : ''}`
+  )}
+</button>
         </div>
       </div>
 

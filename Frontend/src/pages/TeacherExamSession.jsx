@@ -1052,27 +1052,6 @@ newSocket.on('proctoring-violation', (data) => {
     }
   }, [examId]);
 
-  
-
-  // DAGDAGIN ito after the main socket effect:
-useEffect(() => {
-  if (!socketRef.current) return;
-
-  // ✅ Add proctoring alert listener separately
-  const currentSocket = socketRef.current;
-  
-  const proctoringHandler = (data) => {
-    handleProctoringAlert(data);
-  };
-  
-  currentSocket.on('proctoring-alert', proctoringHandler);
-  
-  return () => {
-    if (currentSocket) {
-      currentSocket.off('proctoring-alert', proctoringHandler);
-    }
-  };
-}, [handleProctoringAlert]); // ✅ Now this is safe
 
   // ==================== EXAM SESSION MANAGEMENT ====================
 // ==================== EXAM SESSION MANAGEMENT ====================

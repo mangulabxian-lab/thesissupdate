@@ -356,14 +356,50 @@ export const getQuizForStudent = async (examId) => {
   }
 };
 
+// api.js - FIX THE submitQuizAnswers FUNCTION
 export const submitQuizAnswers = async (examId, answers) => {
   try {
-    const response = await api.post(`/exams/${examId}/submit`, { answers });
+    console.log('📤 Submitting quiz answers:', {
+      examId: examId,
+      answersCount: Array.isArray(answers) ? answers.length : Object.keys(answers).length,
+      answersType: Array.isArray(answers) ? 'array' : 'object'
+    });
+    
+    // ✅ FORMAT ANSWERS PROPERLY FOR BACKEND
+    let formattedAnswers;
+    
+    if (Array.isArray(answers)) {
+      // If already in array format
+      formattedAnswers = answers;
+    } else {
+      // Convert object format to array format
+      formattedAnswers = Object.entries(answers).map(([questionIndex, answer]) => ({
+        questionIndex: parseInt(questionIndex),
+        answer: answer
+      }));
+    }
+    
+    console.log('📦 Formatted answers for submission:', formattedAnswers);
+    
+    const response = await api.post(`/exams/${examId}/submit`, { 
+      answers: formattedAnswers,
+      submittedAt: new Date().toISOString()
+    });
+    
+    console.log('✅ Quiz submission response:', response.data);
     return response.data;
+    
   } catch (error) {
+    console.error('❌ Quiz submission error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
     return {
       success: false,
-      message: error.response?.data?.message || "Failed to submit answers."
+      message: error.response?.data?.message || "Failed to submit answers.",
+      error: error.response?.data || error.message
     };
   }
 };

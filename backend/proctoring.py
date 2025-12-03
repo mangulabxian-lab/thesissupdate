@@ -22,6 +22,9 @@ import pytesseract
 from PIL import Image
 import io
 
+import requests
+import json
+
 # Add near other global variables
 student_attempts = defaultdict(lambda: {
     'current_attempts': 0,
@@ -48,6 +51,41 @@ tab_switch_tracker = defaultdict(lambda: {
 
 screenshot_detection_enabled = True
 screenshot_violations = defaultdict(list)
+
+
+def send_detection_to_server(exam_id, student_id, detection_type, confidence, message=""):
+    """Send detection alert to Node.js server"""
+    
+    url = "http://localhost:3000/api/proctoring/python-detection"
+    
+    data = {
+        "exam_id": exam_id,
+        "student_id": student_id,
+        "detection_type": detection_type,
+        "confidence": confidence,
+        "message": message,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    try:
+        response = requests.post(url, json=data, timeout=2)
+        if response.status_code == 200:
+            print(f"✅ Detection sent to server: {detection_type}")
+        else:
+            print(f"❌ Failed to send detection: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Error sending detection: {e}")
+        
+        # Fallback: Save to file for manual sync
+        save_detection_locally(data)
+
+def save_detection_locally(data):
+    """Save detection to local file if server is unreachable"""
+    try:
+        with open("pending_detections.json", "a") as f:
+            f.write(json.dumps(data) + "\n")
+    except:
+        pass
 
 # Initialize Flask app FIRST
 app = Flask(__name__)

@@ -904,6 +904,7 @@ export default function Dashboard() {
 
   // ✅ UPDATED: QUIZ ACTION HANDLER WITH ENHANCED SOCKET SUPPORT =====
   // ✅ UPDATED: QUIZ ACTION HANDLER WITH ENHANCED SOCKET SUPPORT
+// Sa Dashboard.jsx - I-UPDATE ang handleQuizAction function para sa student
 const handleQuizAction = (exam) => {
   const examTypeDisplay = getExamTypeDisplay(exam);
   const actionButton = getExamActionButton(exam, selectedClass?.userRole, user._id);
@@ -931,25 +932,16 @@ const handleQuizAction = (exam) => {
       }
     }
   } else {
-    // Student actions
+    // ✅ STUDENT ACTIONS - ENHANCED WITH WAITING ROOM
     if (actionButton.action === 'review') {
-      // Navigate to review answers
       navigate(`/review-exam/${exam._id}`);
       return;
     }
     
     if (exam.examType === 'live-class') {
-      // Live class logic remains the same
+      // ✅ LIVE CLASS - DAPAT MAY WAITING ROOM
       if (exam.isActive) {
-        if (socketRef.current) {
-          socketRef.current.emit('student-joining-live-class', {
-            examId: exam._id,
-            classId: selectedClass._id,
-            studentId: user._id,
-            studentName: user.name
-          });
-        }
-        
+        // Navigate to StudentQuizPage WITH WAITING ROOM STATE
         navigate(`/student-quiz/${exam._id}`, {
           state: {
             isLiveClass: true,
@@ -957,32 +949,27 @@ const handleQuizAction = (exam) => {
             requiresMicrophone: true,
             examTitle: exam.title,
             className: selectedClass?.name || 'Class',
-            classId: selectedClass?._id
+            classId: selectedClass?._id,
+            examType: 'live-class', // ✅ CRITICAL: Set exam type
+            waitingRoomRequired: true // ✅ NEW: Flag for waiting room
           }
         });
       } else {
-        checkLiveSessionStatusForExam(exam._id).then(isActive => {
-          if (isActive) {
-            alert('Live class has started! Redirecting you now...');
-            navigate(`/student-quiz/${exam._id}`);
-          } else {
-            alert('Live class has not started yet. Please wait for the teacher to begin.');
-          }
-        });
+        alert('Live class has not started yet. Please wait for the teacher to begin.');
       }
     } else if (actionButton.action === 'start-quiz') {
-      // ✅ ASYNC QUIZ - Start the quiz
+      // ✅ ASYNC QUIZ - WITH STRICT PERMISSIONS
       console.log('📝 Student starting async quiz:', exam._id);
       navigate(`/student-quiz/${exam._id}`, {
         state: {
-          requiresCamera: exam.isActive, // Only requires camera if active session
-          requiresMicrophone: false,
+          requiresCamera: true, // ✅ ALWAYS require camera for async quiz
+          requiresMicrophone: true, // ✅ ALWAYS require microphone
           examTitle: exam.title,
           className: selectedClass?.name || 'Class',
           classId: selectedClass?._id,
-          isExamSession: exam.isActive,
-          timeLimit: exam.timeLimit || 60
-        }
+          examType: 'asynchronous', // ✅ CRITICAL: Set exam type
+          waitingRoomRequired: false
+        }// ✅ NEW: Also need waiting roo
       });
     }
   }
@@ -1001,7 +988,8 @@ const handleQuizAction = (exam) => {
           classId: selectedClass?._id,
           className: selectedClass?.name,
           requiresCamera: isActiveSession,
-          isExamSession: isActiveSession
+          isExamSession: isActiveSession,
+          examType: exam.examType || 'asynchronous' // ✅ ADD TH
         }
       });
       

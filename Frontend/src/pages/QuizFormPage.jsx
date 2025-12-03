@@ -350,10 +350,9 @@ const saveQuizToBackend = async (extraFields = {}) => {
 
   const questionsForBackend = quiz.questions.map(({ id, ...question }) => question);
   
-  // Calculate total seconds for timer
   const timeLimitSeconds = examType === 'asynchronous' 
-  ? (examTimer.hours * 3600) + (examTimer.minutes * 60) + examTimer.seconds
-  : 0;
+    ? (examTimer.hours * 3600) + (examTimer.minutes * 60) + examTimer.seconds
+    : 0;
 
   let response;
   let savedExamId;

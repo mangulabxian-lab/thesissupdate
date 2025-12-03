@@ -52,7 +52,33 @@ export default function TeacherExamSession() {
   const activeConnections = useRef(new Set());
   const messagesEndRef = useRef(null);
 
+  // Add this function in TeacherExamSession.jsx
+const playAlertSound = () => {
+  try {
+    // Create a simple beep sound
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800;
+    oscillator.type = 'sine';
+    
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.5);
+  } catch (error) {
+    console.log('Audio notification failed:', error);
+  }
+};
+
   // ==================== PROCTORING ALERTS FUNCTIONS ====================
+// In TeacherExamSession.jsx, enhance the handleProctoringAlert:
+
 const handleProctoringAlert = useCallback((data) => {
   console.log('🚨 Teacher received proctoring alert:', data);
   
@@ -60,37 +86,66 @@ const handleProctoringAlert = useCallback((data) => {
     console.error('❌ No student socket ID in proctoring alert');
     return;
   }
-
-  // ✅ UPDATE ATTEMPTS FROM SERVER DATA
+  
+  // ✅ ESPECIALLY FOR TAB SWITCHING
+  if (data.detectionType === 'tab_switching') {
+    console.log('💻 TAB SWITCH DETECTED - HIGH PRIORITY:', {
+      student: data.studentName,
+      count: data.metadata?.count,
+      timestamp: data.timestamp
+    });
+    
+    // Play special sound for tab switching
+    playAlertSound();
+    
+    // Show critical notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('💻 Tab Switch Detected', {
+        body: `${data.studentName || 'Student'}: ${data.message}`,
+        icon: '/favicon.ico',
+        tag: 'tab-switch-alert'
+      });
+    }
+  }
+  // ✅ UPDATE STUDENT ATTEMPTS
   if (data.attemptsInfo) {
     setStudentAttempts(prev => ({
       ...prev,
-      [data.studentSocketId]: data.attemptsInfo
+      [data.studentSocketId]: {
+        currentAttempts: data.attemptsInfo?.currentAttempts || 0,
+        maxAttempts: data.attemptsInfo?.maxAttempts || 10,
+        attemptsLeft: data.attemptsInfo?.attemptsLeft || 10,
+        history: data.attemptsInfo?.history || []
+      }
     }));
-    
-    // Update students list with attempts info
-    setStudents(prev => prev.map(student => 
-      student.socketId === data.studentSocketId 
-        ? { 
-            ...student, 
-            violations: data.attemptsInfo.currentAttempts,
-            attemptsLeft: data.attemptsInfo.attemptsLeft
-          }
-        : student
-    ));
   }
   
-  // ✅ FIXED: Use unique ID to prevent duplicates
+  // ✅ UPDATE STUDENTS LIST WITH ALERT STATUS
+  setStudents(prev => prev.map(student => {
+    if (student.socketId === data.studentSocketId) {
+      const studentAlerts = proctoringAlerts[student.socketId] || [];
+      return {
+        ...student,
+        hasAlerts: true,
+        alertCount: studentAlerts.length + 1,
+        lastAlertTime: new Date().toISOString(),
+        violations: data.attemptsInfo?.currentAttempts || student.violations,
+        attemptsLeft: data.attemptsInfo?.attemptsLeft || student.attemptsLeft
+      };
+    }
+    return student;
+  }));
+  
+  // ✅ ADD TO ALERTS DISPLAY WITH DE-DUPLICATION
   const alertId = `${data.studentSocketId}_${Date.now()}_${data.detectionType || 'alert'}`;
   
-  // Add to alerts display with duplicate prevention
   setProctoringAlerts(prev => {
     const studentAlerts = prev[data.studentSocketId] || [];
     
-    // Check if this exact alert already exists (within 5 seconds)
+    // De-duplicate: same message within 3 seconds
     const isDuplicate = studentAlerts.some(alert => 
       alert.message === data.message && 
-      Date.now() - new Date(alert.timestamp).getTime() < 5000
+      Date.now() - new Date(alert.timestamp).getTime() < 3000
     );
     
     if (isDuplicate) {
@@ -105,18 +160,47 @@ const handleProctoringAlert = useCallback((data) => {
       severity: data.severity || 'medium',
       timestamp: new Date().toLocaleTimeString(),
       detectionType: data.detectionType,
-      confidence: data.confidence
+      confidence: data.confidence,
+      source: data.source || 'student'
     };
     
     return {
       ...prev,
-      [data.studentSocketId]: [
-        newAlert,
-        ...studentAlerts
-      ].slice(0, 20)
+      [data.studentSocketId]: [newAlert, ...studentAlerts].slice(0, 50) // Keep last 50 alerts
     };
   });
+  
+  // ✅ LOG TO CONSOLE FOR DEBUGGING
+  console.log(`📊 Alert added for ${data.studentName || data.studentSocketId}:`, {
+    message: data.message,
+    type: data.detectionType,
+    count: (proctoringAlerts[data.studentSocketId] || []).length + 1
+  });
+  
 }, [examId, students]);
+
+// ✅ ADD PYTHON DETECTION HANDLER
+useEffect(() => {
+  if (!socketRef.current) return;
+  
+  const pythonDetectionHandler = (data) => {
+    console.log('🐍 Python detection alert:', data);
+    handleProctoringAlert({
+      ...data,
+      studentSocketId: data.studentId, // Map studentId to socketId if needed
+      detectionType: data.detectionType || 'python_detection',
+      source: 'python'
+    });
+  };
+  
+  socketRef.current.on('python-detection', pythonDetectionHandler);
+  
+  return () => {
+    if (socketRef.current) {
+      socketRef.current.off('python-detection', pythonDetectionHandler);
+    }
+  };
+}, [handleProctoringAlert]);
 
 
 
@@ -128,30 +212,156 @@ const handleProctoringAlert = useCallback((data) => {
       [studentSocketId]: !prev[studentSocketId]
     }));
   };
+const dismissStudentAlert = (studentSocketId, alertId) => {
+  setProctoringAlerts(prev => {
+    const updated = { ...prev };
+    if (updated[studentSocketId]) {
+      updated[studentSocketId] = updated[studentSocketId].filter(
+        alert => alert.id !== alertId
+      );
+      
+      // If no alerts left, remove the key
+      if (updated[studentSocketId].length === 0) {
+        delete updated[studentSocketId];
+      }
+    }
+    return updated;
+  });
+};
 
-  const clearStudentAlerts = (studentSocketId, e) => {
-    e.stopPropagation();
-    console.log('🗑️ Clearing alerts for student:', studentSocketId);
+  const clearStudentAlerts = (studentSocketId) => {
+  setProctoringAlerts(prev => {
+    const updated = { ...prev };
+    delete updated[studentSocketId];
+    return updated;
+  });
+  
+  // Update student status
+  setStudents(prev => prev.map(student => 
+    student.socketId === studentSocketId 
+      ? { ...student, hasAlerts: false, alertCount: 0 }
+      : student
+  ));
+};
+
+const clearAllAlerts = () => {
+  if (window.confirm('Are you sure you want to clear all alerts for all students?')) {
+    setProctoringAlerts({});
     
-    setProctoringAlerts(prev => {
-      const updated = { ...prev };
-      delete updated[studentSocketId];
-      return updated;
-    });
+    // Update all students status
+    setStudents(prev => prev.map(student => ({
+      ...student,
+      hasAlerts: false,
+      alertCount: 0
+    })));
     
-    setExpandedAlerts(prev => {
-      const updated = { ...prev };
-      delete updated[studentSocketId];
-      return updated;
-    });
-    
-    // Update student status
-    setStudents(prev => prev.map(student => 
-      student.socketId === studentSocketId 
-        ? { ...student, hasAlerts: false, alertCount: 0 }
-        : student
-    ));
-  };
+    alert('All alerts have been cleared.');
+  }
+};
+
+
+// ✅ IMPROVED PROCTORING ALERTS RENDER FUNCTION - INTEGRATED IN FOOTER
+const renderProctoringAlerts = (student) => {
+  const studentAlerts = proctoringAlerts[student.socketId] || [];
+  
+  // ✅ FIX: Gumamit ng consistent variable name
+  const attemptsData = studentAttempts[student.socketId]; // Ito ang tama
+  
+  const isExpanded = expandedAlerts[student.socketId];
+  
+  return (
+    <div className="proctoring-alerts-footer">
+      {/* ATTEMPTS DISPLAY */}
+      {attemptsData && (
+        <div className={`attempts-display-mini ${
+          attemptsData.attemptsLeft <= 3 ? 'warning' : ''
+        } ${
+          attemptsData.attemptsLeft === 0 ? 'danger' : ''
+        }`}>
+          <span className="attempts-icon">⚠️</span>
+          <span className="attempts-text">
+            {attemptsData.attemptsLeft}/{attemptsData.maxAttempts}
+          </span>
+        </div>
+      )}
+      
+      {/* ALERTS DISPLAY */}
+      <div 
+        className={`alerts-header ${isExpanded ? 'expanded' : ''}`}
+        onClick={() => toggleAlertsDropdown(student.socketId)}
+      >
+        <div className="alerts-summary">
+          <span className="alert-icon">🚨</span>
+          <span className="alert-count">{studentAlerts.length}</span>
+          <span className="latest-alert-time">
+            {studentAlerts[0]?.timestamp}
+          </span>
+        </div>
+        <div className="alerts-controls">
+          <button 
+            className="clear-alerts-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              clearStudentAlerts(student.socketId);
+            }}
+            title="Clear all alerts"
+          >
+            🗑️
+          </button>
+          <span className="dropdown-arrow">
+            {isExpanded ? '▲' : '▼'}
+          </span>
+        </div>
+      </div>
+      
+      {/* ALERTS DROPDOWN */}
+      {isExpanded && (
+        <div className="alerts-dropdown">
+          {/* ATTEMPTS SUMMARY */}
+          {attemptsData && (
+            <div className="attempts-summary-card">
+              <div className="attempts-header">
+                <h5>📊 Violation Summary</h5>
+                <span className="attempts-total">
+                  {attemptsData.currentAttempts}/{attemptsData.maxAttempts}
+                </span>
+              </div>
+              <div className="attempts-progress">
+                <div 
+                  className="attempts-progress-bar"
+                  style={{ 
+                    width: `${(attemptsData.currentAttempts / attemptsData.maxAttempts) * 100}%`
+                  }}
+                ></div>
+              </div>
+              <div className="attempts-left">
+                {attemptsData.attemptsLeft} attempts remaining
+              </div>
+            </div>
+          )}
+          
+          {/* ALERTS LIST */}
+          <div className="alerts-list">
+            {studentAlerts.slice(0, 5).map((alert, index) => (
+              <div key={alert.id || index} className={`alert-item ${alert.type}`}>
+                <div className="alert-content">
+                  <div className="alert-message">
+                    <span className={`alert-severity ${alert.severity}`}></span>
+                    {alert.message}
+                  </div>
+                  <div className="alert-time">{alert.timestamp}</div>
+                  {alert.detectionType && (
+                    <div className="alert-type">{alert.detectionType}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
   // ==================== PROCTORING CONTROLS FUNCTIONS ====================
  const openProctoringControls = (student) => {
@@ -311,12 +521,11 @@ const handleEndExamSession = async () => {
 };
 
 // ==================== TIMER CONTROL ====================
-// Sa timer effect, siguraduhing nagba-broadcast kapag nag-start
+// Sa TeacherExamSession.jsx, i-update ang timer effect:
 useEffect(() => {
   console.log('⏰ Teacher timer effect running:', { isTimerRunning, timeLeft });
   
   if (isTimerRunning && timeLeft > 0) {
-    // Clear any existing interval first
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
@@ -326,46 +535,47 @@ useEffect(() => {
         const newTime = prev - 1;
         console.log('⏰ Timer tick:', { previous: prev, newTime });
         
-        // Auto-end exam when time reaches 0
         if (newTime <= 0) {
           console.log('⏰ Time up! Auto-ending exam');
           clearInterval(timerRef.current);
-          handleEndExamSession(examId);
+          handleEndExamSession();
           return 0;
         }
         
-       let lastBroadcastTime = 0;
-
-if (socketRef.current && socketRef.current.connected) {
-  const now = Date.now();
-  // ✅ THROTTLE BROADCASTS - Only send every 3 seconds
-  if (now - lastBroadcastTime > 3000) {
-    socketRef.current.emit('exam-time-update', {
-      roomId: `exam-${examId}`,
-      timeLeft: newTime,
-      isTimerRunning: true,
-      timestamp: now,
-      teacherName: 'Teacher'
-    });
-    lastBroadcastTime = now;
-  }
-}
+        // ✅ BROADCAST TO STUDENTS EVERY SECOND
+        if (socketRef.current && socketRef.current.connected) {
+          socketRef.current.emit('exam-time-update', {
+            roomId: `exam-${examId}`,
+            timeLeft: newTime,
+            isTimerRunning: true,
+            timestamp: Date.now(),
+            teacherName: 'Teacher'
+          });
+        }
         
         return newTime;
       });
     }, 1000);
   } else {
-    // Clear interval when timer is paused or time is up
     if (timerRef.current) {
-      console.log('⏰ Clearing timer interval');
       clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+    
+    // ✅ BROADCAST PAUSE STATE
+    if (!isTimerRunning && socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('exam-time-update', {
+        roomId: `exam-${examId}`,
+        timeLeft: timeLeft,
+        isTimerRunning: false,
+        timestamp: Date.now(),
+        teacherName: 'Teacher'
+      });
     }
   }
 
   return () => {
     if (timerRef.current) {
-      console.log('⏰ Cleaning up timer interval');
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
@@ -379,48 +589,37 @@ const handleStartExam = async () => {
   try {
     console.log('🚀 Starting exam session...');
     
-    // ✅ USE THE CORRECT TIMER FROM STATE (not from exam data)
-    let initialTime = timeLeft;
-    
-    // If timer is 10 minutes (default), check if we should use exam timer
-    if (timeLeft === 600 || timeLeft === 10) {
-      if (exam?.timerSettings?.totalSeconds > 0) {
-        initialTime = exam.timerSettings.totalSeconds;
-        console.log("⏰ Using timer from quiz settings:", initialTime);
-      } else if (exam?.timeLimit > 0) {
-        initialTime = exam.timeLimit * 60;
-        console.log("⏰ Using timer from timeLimit:", initialTime);
-      }
-      setTimeLeft(initialTime); // Update state
-    }
-    
-    console.log("✅ Starting with timer:", initialTime, "seconds (", formatTime(initialTime), ")");
-    
-    const response = await startExamSession(examId);
-    if (response.success) {
-      setSessionStarted(true);
-      setIsTimerRunning(true);
+    // ✅ SET TIMER ON SERVER FIRST
+    if (socketRef.current) {
+      // I-save ang timer state sa server
+      socketRef.current.emit('set-exam-timer', {
+        roomId: `exam-${examId}`,
+        timeLeft: timeLeft,
+        examId: examId
+      });
       
-      // ✅ BROADCAST CORRECT TIMER
-      if (socketRef.current) {
+      // Then start the exam
+      const response = await startExamSession(examId);
+      if (response.success) {
+        setSessionStarted(true);
+        setIsTimerRunning(true);
+        
+        // ✅ BROADCAST TIMER TO ALL STUDENTS
         socketRef.current.emit('exam-time-update', {
           roomId: `exam-${examId}`,
-          timeLeft: initialTime,
+          timeLeft: timeLeft,
           isTimerRunning: true,
           timestamp: Date.now(),
           teacherName: 'Teacher'
         });
         
-        console.log('✅ Exam started with timer:', formatTime(initialTime));
-        alert(`✅ Exam started! Timer: ${formatTime(initialTime)}`);
+        console.log('✅ Exam started with timer synced to all students');
       }
     }
   } catch (error) {
     console.error('Failed to start exam:', error);
-    alert('Failed to start exam session');
   }
 };
-
 // ==================== TIMER CONTROL FUNCTIONS ====================
 const applyCustomTime = () => {
   const totalSeconds = (customTime.hours * 3600) + (customTime.minutes * 60) + customTime.seconds;
@@ -456,80 +655,58 @@ const applyCustomTime = () => {
 };
 
 const addTime = (minutes) => {
-  // If timer is 10 minutes (default), check if we should use exam's original timer
+  // If timer is 0 or default, check if we should use exam's original timer
   let currentTime = timeLeft;
   
-  if (timeLeft === 600 || timeLeft === 10) {
+  if (timeLeft === 0 || timeLeft === 600) {
     // Try to get original timer from exam
     if (exam?.timerSettings?.totalSeconds > 0) {
       currentTime = exam.timerSettings.totalSeconds;
-      console.log("🔄 Switching from default 10min to original timer:", currentTime);
+      console.log("🔄 Switching from default to original timer:", currentTime);
       setTimeLeft(currentTime);
     }
   }
   
-  const additionalSeconds = minutes * 60;
-  const newTime = currentTime + additionalSeconds;
+const additionalSeconds = minutes * 60;
+  const newTime = timeLeft + additionalSeconds;
   
-  console.log('➕ Adding time:', {
-    currentTime: currentTime,
-    additionalMinutes: minutes,
-    newTime: newTime,
-    formatted: formatTime(newTime)
-  });
-
   setTimeLeft(newTime);
   
-  // ✅ CRITICAL: Update the room state immediately
+  // ✅ UPDATE SERVER AND BROADCAST
   if (socketRef.current) {
-    // Update room state
-    if (examRooms.has(`exam-${examId}`)) {
-      const room = examRooms.get(`exam-${examId}`);
-      room.timeLeft = newTime;
-    }
+    // Update server
+    socketRef.current.emit('set-exam-timer', {
+      roomId: `exam-${examId}`,
+      timeLeft: newTime
+    });
     
-    // ✅ BROADCAST UPDATED TIME WITH FORCE FLAG
+    // Broadcast to students
     socketRef.current.emit('exam-time-update', {
       roomId: `exam-${examId}`,
       timeLeft: newTime,
       isTimerRunning: isTimerRunning,
       timestamp: Date.now(),
-      teacherName: 'Teacher',
-      action: 'add_time', // Add action type
-      additionalMinutes: minutes
+      teacherName: 'Teacher'
     });
-    
-    // ✅ ALSO SEND DIRECT TIME SYNC REQUEST
-    setTimeout(() => {
-      socketRef.current.emit('force-timer-sync', {
-        roomId: `exam-${examId}`,
-        timeLeft: newTime,
-        isTimerRunning: isTimerRunning,
-        forceUpdate: true
-      });
-    }, 100);
   }
+
   
   alert(`✅ Added ${minutes} minutes. New time: ${formatTime(newTime)}`);
 };
 
+// Sa pauseTimer:
 const pauseTimer = () => {
-  console.log('⏸️ Teacher pausing timer');
   setIsTimerRunning(false);
-  setShowTimerControls(false);
   
-  // ✅ SEND TO SERVER FOR PERSISTENCE
+  // ✅ BROADCAST PAUSE STATE
   if (socketRef.current) {
-    socketRef.current.emit('pause-exam-timer', {
+    socketRef.current.emit('exam-time-update', {
       roomId: `exam-${examId}`,
-      examId: examId
+      timeLeft: timeLeft,
+      isTimerRunning: false,
+      timestamp: Date.now(),
+      teacherName: 'Teacher'
     });
-  }
-  
-  // Clear the interval immediately
-  if (timerRef.current) {
-    clearInterval(timerRef.current);
-    timerRef.current = null;
   }
 };
 
@@ -546,8 +723,7 @@ const resumeTimer = () => {
     });
   }
 
-  
-  // ✅ BROADCAST RESUME STATE IMMEDIATELY
+  // ✅ BROADCAST RESUME STATE
   if (socketRef.current) {
     socketRef.current.emit('exam-time-update', {
       roomId: `exam-${examId}`,
@@ -752,6 +928,31 @@ newSocket.on('student-attempts-update', (data) => {
       : student
   ));
 });
+
+// TeacherExamSession.jsx - ADD sa socket event listeners
+
+// Tab switch specific handler
+newSocket.on('tab-switch-detected', (data) => {
+  console.log('💻 Teacher received tab switch alert:', data);
+  
+  handleProctoringAlert({
+    studentName: data.studentName || 'Unknown Student',
+    studentSocketId: data.studentSocketId,
+    message: data.message,
+    type: 'danger',
+    severity: 'high',
+    timestamp: new Date().toLocaleTimeString(),
+    detectionType: 'tab_switching'
+  });
+  
+  // Update student attempts in UI
+  updateStudentAttempts(data.studentSocketId, {
+    attemptsLeft: data.attemptsInfo?.attemptsLeft || 0,
+    currentAttempts: data.attemptsInfo?.currentAttempts || 0
+  });
+});
+
+
     newSocket.on('connect_error', (error) => {
       console.error('❌ Teacher Socket connection failed:', error.message);
       setSocketStatus('error');
@@ -797,6 +998,8 @@ newSocket.on('proctoring-violation', (data) => {
     confidence: data.confidence
   });
 });
+
+
     newSocket.on('proctoring-alert', handleProctoringAlert);
     newSocket.on('student-joined', handleStudentJoined);
     newSocket.on('student-left', handleStudentLeft);
@@ -809,13 +1012,16 @@ newSocket.on('proctoring-violation', (data) => {
     newSocket.on('send-detection-settings', handleDetectionSettingsUpdate);
     
     newSocket.on('student-time-request', (data) => {
-      console.log('🕒 Student requesting current time:', data.studentSocketId);
-      newSocket.emit('send-current-time', {
-        studentSocketId: data.studentSocketId,
-        timeLeft: timeLeft,
-        isTimerRunning: isTimerRunning
-      });
-    });
+  console.log('🕒 Student requesting current time:', data.studentSocketId);
+  
+  // ✅ SEND CURRENT TIME TO STUDENT
+  newSocket.emit('send-current-time', {
+    studentSocketId: data.studentSocketId,
+    timeLeft: timeLeft,
+    isTimerRunning: isTimerRunning,
+    examStarted: sessionStarted
+  });
+});
 
     setSocket(newSocket);
     socketRef.current = newSocket;
@@ -846,6 +1052,7 @@ newSocket.on('proctoring-violation', (data) => {
     }
   }, [examId]);
 
+  
 
   // DAGDAGIN ito after the main socket effect:
 useEffect(() => {
@@ -1303,6 +1510,7 @@ useEffect(() => {
   const connectedStudents = students.filter(student => student.socketId && student.isConnected);
 
   // Timer Controls Component
+// TIMER CONTROLS COMPONENT - FIXED
 const renderTimerControls = () => {
   if (!showTimerControls) return null;
 
@@ -1360,32 +1568,33 @@ const renderTimerControls = () => {
             </button>
           </div>
         </div>
-        // In renderTimerControls function, add a live preview:
-<div className="timer-live-preview">
-  <h5>🕒 Current Timer State</h5>
-  <div className="timer-state-info">
-    <p><strong>Time:</strong> {formatTime(timeLeft)}</p>
-    <p><strong>Status:</strong> {isTimerRunning ? 'Running ▶️' : 'Paused ⏸️'}</p>
-    <p><strong>Connected Students:</strong> {connectedStudents.length}</p>
-    <button 
-      className="sync-now-btn"
-      onClick={() => {
-        // Force sync all students
-        if (socketRef.current) {
-          socketRef.current.emit('force-timer-sync', {
-            roomId: `exam-${examId}`,
-            timeLeft: timeLeft,
-            isTimerRunning: isTimerRunning,
-            forceUpdate: true
-          });
-          alert('🔄 Syncing timer with all students...');
-        }
-      }}
-    >
-      🔄 Sync Now with All Students
-    </button>
-  </div>
-</div>
+
+        {/* ✅ ADD LIVE PREVIEW SECTION */}
+        <div className="timer-live-preview">
+          <h5>🕒 Current Timer State</h5>
+          <div className="timer-state-info">
+            <p><strong>Time:</strong> {formatTime(timeLeft)}</p>
+            <p><strong>Status:</strong> {isTimerRunning ? 'Running ▶️' : 'Paused ⏸️'}</p>
+            <p><strong>Connected Students:</strong> {connectedStudents.length}</p>
+            <button 
+              className="sync-now-btn"
+              onClick={() => {
+                // Force sync all students
+                if (socketRef.current) {
+                  socketRef.current.emit('force-timer-sync', {
+                    roomId: `exam-${examId}`,
+                    timeLeft: timeLeft,
+                    isTimerRunning: isTimerRunning,
+                    forceUpdate: true
+                  });
+                  alert('🔄 Syncing timer with all students...');
+                }
+              }}
+            >
+              🔄 Sync Now with All Students
+            </button>
+          </div>
+        </div>
 
         <div className="timer-info">
           <p><strong>Current Time:</strong> {formatTime(timeLeft)}</p>
@@ -1535,182 +1744,197 @@ const renderTimerControls = () => {
   );
 };
 
-// ✅ IMPROVED PROCTORING ALERTS RENDER FUNCTION - INTEGRATED IN FOOTER
-// ✅ IMPROVED PROCTORING ALERTS RENDER FUNCTION - INTEGRATED IN FOOTER
-const renderProctoringAlerts = (student) => {
-  const studentAlerts = proctoringAlerts[student.socketId] || [];
-  
-  // ✅ FIX: Use the correct state variable name
-  const attemptsData = studentAttempts[student.socketId]; // Changed from studentAttemptsData
-  
-  const isExpanded = expandedAlerts[student.socketId];
-  
-  return (
-    <div className="proctoring-alerts-footer">
-      {/* ATTEMPTS DISPLAY */}
-      {attemptsData && ( // ✅ Changed from studentAttempts to attemptsData
-        <div className={`attempts-display-mini ${
-          attemptsData.attemptsLeft <= 3 ? 'warning' : ''
-        } ${
-          attemptsData.attemptsLeft === 0 ? 'danger' : ''
-        }`}>
-          <span className="attempts-icon">⚠️</span>
-          <span className="attempts-text">
-            {attemptsData.attemptsLeft}/{attemptsData.maxAttempts} {/* ✅ Fixed */}
-          </span>
-        </div>
-      )}
-      
-      {/* ALERTS DISPLAY */}
-      <div 
-        className={`alerts-header ${isExpanded ? 'expanded' : ''}`}
-        onClick={() => toggleAlertsDropdown(student.socketId)}
-      >
-        <div className="alerts-summary">
-          <span className="alert-icon">🚨</span>
-          <span className="alert-count">{studentAlerts.length}</span>
-          <span className="latest-alert-time">
-            {studentAlerts[0]?.timestamp}
-          </span>
-        </div>
-        <div className="alerts-controls">
-          <button 
-            className="clear-alerts-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              clearStudentAlerts(student.socketId, e);
-            }}
-            title="Clear all alerts"
-          >
-            🗑️
-          </button>
-          <span className="dropdown-arrow">
-            {isExpanded ? '▲' : '▼'}
-          </span>
-        </div>
-      </div>
-      
-      {/* ALERTS DROPDOWN */}
-      {isExpanded && (
-        <div className="alerts-dropdown">
-          {/* ATTEMPTS SUMMARY */}
-          {attemptsData && ( // ✅ Changed from studentAttempts to attemptsData
-            <div className="attempts-summary-card">
-              <div className="attempts-header">
-                <h5>📊 Violation Summary</h5>
-                <span className="attempts-total">
-                  {attemptsData.currentAttempts}/{attemptsData.maxAttempts} {/* ✅ Fixed */}
-                </span>
-              </div>
-              <div className="attempts-progress">
-                <div 
-                  className="attempts-progress-bar"
-                  style={{ 
-                    width: `${(attemptsData.currentAttempts / attemptsData.maxAttempts) * 100}%`  // ✅ Fixed
-                  }}
-                ></div>
-              </div>
-              <div className="attempts-left">
-                {attemptsData.attemptsLeft} attempts remaining {/* ✅ Fixed */}
-              </div>
-            </div>
-          )}
-          
-          {/* ALERTS LIST */}
-          <div className="alerts-list">
-            {studentAlerts.slice(0, 5).map((alert, index) => (
-              <div key={alert.id || index} className={`alert-item ${alert.type}`}>
-                <div className="alert-content">
-                  <div className="alert-message">
-                    <span className={`alert-severity ${alert.severity}`}></span>
-                    {alert.message}
-                  </div>
-                  <div className="alert-time">{alert.timestamp}</div>
-                  {alert.detectionType && (
-                    <div className="alert-type">{alert.detectionType}</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
-  const renderStudentVideos = () => {
-    const studentsWithStreams = connectedStudents
-      .filter(student => studentStreams[student.socketId])
-      .sort((a, b) => getSafeStudentName(a).localeCompare(getSafeStudentName(b)));
 
-    if (studentsWithStreams.length === 0) {
-      return (
-        <div className="no-videos">
-          <div className="empty-state">
-            <div className="camera-icon"></div>
-            <h4>No one is here</h4>
-          </div>
-        </div>
-      );
-    }
+const renderStudentVideos = () => {
+  const studentsWithStreams = connectedStudents
+    .filter(student => studentStreams[student.socketId])
+    .sort((a, b) => getSafeStudentName(a).localeCompare(getSafeStudentName(b)));
 
+  if (studentsWithStreams.length === 0) {
     return (
-      <div className="video-grid-container">
-        <div className="grid-header">
-          <span>Live Student Cameras ({studentsWithStreams.length})</span>
-        </div>
-        
-        <div className="video-grid">
-          {studentsWithStreams.map((student, index) => {
-            const socketId = student.socketId;
-            const stream = studentStreams[socketId];
-
-            return (
-              <div key={socketId} className="student-video-card">
-                <div className="video-header">
-                  <span className="student-badge">#{index + 1}</span>
-                  <span className="student-name">{getSafeStudentName(student)}</span>
-                  
-                </div>
-                
-                <div className="video-container">
-                  <video 
-                    ref={(element) => setVideoRef(socketId, element)}
-                    autoPlay 
-                    muted
-                    playsInline
-                    className="student-video"
-                  />
-                </div>
-                
-                {/* ✅ VIDEO FOOTER WITH PROCTORING ALERTS */}
-<div className="video-footer">
-<div className="student-info-compact">
-  <span className="connection-type">🟢 Online</span>
-  {studentAttempts[student.socketId] && (
-  <span className={`attempts-display ${
-    studentAttempts[student.socketId].attemptsLeft <= 3 ? 'warning' : ''
-  } ${
-    studentAttempts[student.socketId].attemptsLeft === 0 ? 'danger' : ''
-  }`}>
-    Attempts: {studentAttempts[student.socketId].attemptsLeft}/{studentAttempts[student.socketId].maxAttempts}
-  </span>
-)}
-</div>
-  
-  {/* ✅ PROCTORING ALERTS SECTION */}
-  <div className="proctoring-alerts-section">
-    {renderProctoringAlerts(student)}
-  </div>
-</div>
-              </div>
-            );
-          })}
+      <div className="no-videos">
+        <div className="empty-state">
+          <div className="camera-icon"></div>
+          <h4>No one is here</h4>
         </div>
       </div>
     );
-  };
+  }
+
+  return (
+    <div className="video-grid-container">
+      <div className="grid-header">
+        <span>Live Student Cameras ({studentsWithStreams.length})</span>
+        <div className="global-alert-summary">
+          <span className="summary-item">
+            🎤 {Object.values(proctoringAlerts).flat().filter(a => a.detectionType?.includes('audio')).length}
+          </span>
+          <span className="summary-item">
+            💻 {Object.values(proctoringAlerts).flat().filter(a => a.detectionType?.includes('tab_switch')).length}
+          </span>
+          <span className="summary-item">
+            🤚 {Object.values(proctoringAlerts).flat().filter(a => a.detectionType?.includes('gesture')).length}
+          </span>
+          <span className="summary-item">
+            👁️ {Object.values(proctoringAlerts).flat().filter(a => a.detectionType?.includes('face') || a.detectionType?.includes('gaze')).length}
+          </span>
+        </div>
+      </div>
+      
+      <div className="video-grid">
+        {studentsWithStreams.map((student, index) => {
+          const socketId = student.socketId;
+          const stream = studentStreams[socketId];
+          const studentAlerts = proctoringAlerts[socketId] || [];
+          const recentAlerts = studentAlerts.slice(0, 3);
+          const totalAlerts = studentAlerts.length;
+          
+          // Get alert counts by type
+          const alertCounts = {
+            audio: studentAlerts.filter(alert => 
+              alert.detectionType?.includes('audio') || alert.message?.includes('AUDIO')
+            ).length,
+            tab: studentAlerts.filter(alert => 
+              alert.detectionType?.includes('tab_switch') || alert.message?.includes('TAB')
+            ).length,
+            gesture: studentAlerts.filter(alert => 
+              alert.detectionType?.includes('gesture') || alert.message?.includes('GESTURE')
+            ).length,
+            face: studentAlerts.filter(alert => 
+              alert.detectionType?.includes('face') || 
+              alert.message?.includes('NO FACE') || 
+              alert.message?.includes('GAZE')
+            ).length,
+            screenshot: studentAlerts.filter(alert => 
+              alert.detectionType?.includes('screenshot') || alert.message?.includes('SCREENSHOT')
+            ).length
+          };
+          
+          const hasAlerts = totalAlerts > 0;
+          const hasCriticalAlerts = studentAlerts.some(alert => 
+            alert.severity === 'high' || alert.type === 'danger'
+          );
+
+          return (
+            <div key={socketId} className={`student-video-card ${
+              hasAlerts ? 'has-alerts' : ''
+            } ${
+              hasCriticalAlerts ? 'critical-alerts' : ''
+            } ${
+              recentAlerts.length > 0 ? 'new-alert' : ''
+            }`}>
+              
+              {/* Video Header */}
+              <div className="video-header">
+                <span className="student-badge">#{index + 1}</span>
+                <span className="student-name">{getSafeStudentName(student)}</span>
+                
+                {/* Alert Badge */}
+                {totalAlerts > 0 && (
+                  <div className="alert-badge" title={`${totalAlerts} alerts`}>
+                    {totalAlerts > 9 ? '9+' : totalAlerts}
+                  </div>
+                )}
+              </div>
+              
+              {/* Video Container */}
+              <div className="video-container">
+                <video 
+                  ref={(element) => setVideoRef(socketId, element)}
+                  autoPlay 
+                  muted
+                  playsInline
+                  className="student-video"
+                />
+              </div>
+              
+              {/* ✅ VIDEO FOOTER WITH PROCTORING ALERTS */}
+              <div className="video-footer">
+              
+<div className="student-info-compact">
+  <span className="connection-type">🟢 Online</span>
+  {studentAttempts[student.socketId] && (
+    <span className={`attempts-display ${
+      studentAttempts[student.socketId].attemptsLeft <= 3 ? 'warning' : ''
+    } ${
+      studentAttempts[student.socketId].attemptsLeft === 0 ? 'danger' : ''
+    }`}>
+      Attempts: {studentAttempts[student.socketId].attemptsLeft}/{studentAttempts[student.socketId].maxAttempts}
+    </span>
+  )}
+</div>
+                
+                {/* Alert Summary */}
+                {hasAlerts && (
+                  <div className="alert-summary-mini">
+                    {alertCounts.audio > 0 && (
+                      <span className="audio-alerts" title={`${alertCounts.audio} audio alerts`}>
+                        🎤 {alertCounts.audio}
+                      </span>
+                    )}
+                    {alertCounts.tab > 0 && (
+                      <span className="tab-alerts" title={`${alertCounts.tab} tab switch alerts`}>
+                        💻 {alertCounts.tab}
+                      </span>
+                    )}
+                    {alertCounts.gesture > 0 && (
+                      <span className="gesture-alerts" title={`${alertCounts.gesture} gesture alerts`}>
+                        🤚 {alertCounts.gesture}
+                      </span>
+                    )}
+                    {alertCounts.face > 0 && (
+                      <span className="face-alerts" title={`${alertCounts.face} face detection alerts`}>
+                        👁️ {alertCounts.face}
+                      </span>
+                    )}
+                  </div>
+                )}
+                
+                {/* Recent Alerts Display - ADD THIS SECTION */}
+                {recentAlerts.length > 0 && (
+                  <div className="video-footer-alerts">
+                    {recentAlerts.map((alert, alertIndex) => (
+                      <div key={alertIndex} className={`alert-item-mini ${alert.type || 'warning'}`}>
+                        <span className="alert-icon-mini">
+                          {alert.detectionType?.includes('audio') ? '🎤' :
+                           alert.detectionType?.includes('tab_switch') ? '💻' :
+                           alert.detectionType?.includes('gesture') ? '🤚' :
+                           alert.detectionType?.includes('screenshot') ? '📸' :
+                           alert.detectionType?.includes('face') ? '👁️' :
+                           alert.detectionType?.includes('gaze') ? '👀' :
+                           alert.severity === 'high' ? '🚨' : '⚠️'}
+                        </span>
+                        <span className="alert-message-mini" title={alert.message}>
+                          {alert.message.length > 30 
+                            ? alert.message.substring(0, 30) + '...' 
+                            : alert.message}
+                        </span>
+                        <span className="alert-time-mini">
+                          {alert.timestamp.split(' ')[1]}
+                        </span>
+                        {alert.detectionType && (
+                          <span className="alert-type-badge">
+                            {alert.detectionType.split('_')[0]}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* ✅ PROCTORING ALERTS SECTION */}
+                <div className="proctoring-alerts-section">
+                  {renderProctoringAlerts(student)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
   // Render Chat Component
   const renderChat = () => {
@@ -1820,7 +2044,20 @@ const renderProctoringAlerts = (student) => {
         </div>
         
         <div className="header-right">
-
+          {/* Global Alerts Button */}
+  {Object.keys(proctoringAlerts).length > 0 && (
+    <button 
+      className="global-alerts-btn"
+      onClick={() => {
+        const totalAlerts = Object.values(proctoringAlerts).flat().length;
+        const studentsWithAlerts = Object.keys(proctoringAlerts).length;
+        alert(`Total Alerts: ${totalAlerts}\nStudents with alerts: ${studentsWithAlerts}`);
+      }}
+      title="View alerts summary"
+    >
+      🚨 {Object.values(proctoringAlerts).flat().length}
+    </button>
+  )}
              <button 
       className="global-proctoring-btn"
       onClick={() => setShowProctoringControls(!showProctoringControls)}

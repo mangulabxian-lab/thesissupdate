@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // routes/examRoutes.js - FIXED VERSION
+=======
+// routes/examRoutes.js - FIXED VERSION WITH CORRECTED EXPORT GRADES
+>>>>>>> backupRepo/main
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -10,6 +14,11 @@ const auth = require("../middleware/authMiddleware");
 const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 const axios = require('axios');
+<<<<<<< HEAD
+=======
+const User = require("../models/User");
+const StudentAttempts = require("../models/StudentAttempts"); // Added for violation summary
+>>>>>>> backupRepo/main
 
 // ===== INITIALIZE ROUTER FIRST =====
 const router = express.Router();
@@ -48,6 +57,7 @@ const upload = multer({
   }
 });
 
+<<<<<<< HEAD
 // ===== QUIZ COMMENT ROUTES =====
 
 // ✅ GET comments for a specific quiz/exam
@@ -88,16 +98,113 @@ router.get("/:examId/comments", async (req, res) => {
     res.json({
       success: true,
       data: sortedComments
+=======
+// ===== VIOLATION LOGGING ENDPOINTS =====
+
+// ✅ ADD VIOLATION LOGGING ENDPOINT
+router.post("/log-violation", async (req, res) => {
+  try {
+    const { examId, studentSocketId, violationType, message, severity, detectionSource, confidence, count } = req.body;
+
+    console.log("📝 Logging violation:", { examId, studentSocketId, violationType });
+
+    // Validate required fields
+    if (!examId || !studentSocketId || !violationType) {
+      return res.status(400).json({
+        success: false,
+        message: "examId, studentSocketId, and violationType are required"
+      });
+    }
+
+    // Find student by socket ID or user ID
+    const StudentExamSession = require('../models/StudentExamSession');
+    const session = await StudentExamSession.findOne({ socketId: studentSocketId });
+    
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: "Student session not found"
+      });
+    }
+
+    const studentId = session.studentId;
+    
+    // Find or create StudentAttempts
+    let studentAttempts = await StudentAttempts.findOne({ 
+      studentId: studentId, 
+      examId: examId 
     });
+
+    if (!studentAttempts) {
+      studentAttempts = new StudentAttempts({
+        studentId: studentId,
+        examId: examId,
+        currentAttempts: 0,
+        maxAttempts: 10,
+        attemptsLeft: 10,
+        history: []
+      });
+    }
+
+    // ✅ ENHANCED: Store detailed violation type
+    const violationData = {
+      timestamp: new Date(),
+      violationType: violationType,
+      severity: severity || 'medium',
+      message: message || `${violationType} detected`,
+      detectionSource: detectionSource || 'python',
+      confidence: confidence || 0.0,
+      count: count || 1,
+      attemptsUsed: studentAttempts.currentAttempts + 1,
+      attemptsLeft: studentAttempts.attemptsLeft - 1
+    };
+
+    // Add violation
+    studentAttempts.currentAttempts += 1;
+    studentAttempts.attemptsLeft = Math.max(0, studentAttempts.maxAttempts - studentAttempts.currentAttempts);
+    studentAttempts.history.push(violationData);
+
+    // Keep only last 50 violations
+    if (studentAttempts.history.length > 50) {
+      studentAttempts.history = studentAttempts.history.slice(-50);
+    }
+
+    await studentAttempts.save();
+
+    console.log("✅ Violation logged:", violationType, "for student:", studentId);
+
+    res.json({
+      success: true,
+      message: "Violation logged successfully",
+      data: {
+        violationType: violationType,
+        timestamp: violationData.timestamp,
+        attempts: {
+          current: studentAttempts.currentAttempts,
+          max: studentAttempts.maxAttempts,
+          left: studentAttempts.attemptsLeft
+        }
+      }
+>>>>>>> backupRepo/main
+    });
+
   } catch (err) {
+<<<<<<< HEAD
     console.error("❌ Get quiz comments error:", err);
     res.status(500).json({
       success: false,
       message: "Failed to fetch comments"
+=======
+    console.error("❌ Log violation error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to log violation"
+>>>>>>> backupRepo/main
     });
   }
 });
 
+<<<<<<< HEAD
 // ✅ ADD comment to quiz/exam
 router.post("/:examId/comments", async (req, res) => {
   try {
@@ -291,6 +398,603 @@ router.get("/:examId/details", async (req, res) => {
     }
 
     const exam = await Exam.findById(examId).populate('classId');
+=======
+// ✅ ADD THIS: GET DETAILED VIOLATION BREAKDOWN BY STUDENT
+router.get("/:examId/violation-details/:studentId", async (req, res) => {
+  try {
+    const { examId, studentId } = req.params;
+    const teacherId = req.user.id;
+
+    console.log("📊 GETTING DETAILED VIOLATIONS FOR STUDENT:", { examId, studentId });
+
+    // Validate IDs
+    if (!mongoose.Types.ObjectId.isValid(examId) || !mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ID format"
+      });
+    }
+
+    // Check if user is teacher for this exam
+    const exam = await Exam.findById(examId);
+>>>>>>> backupRepo/main
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+
+<<<<<<< HEAD
+    // Check if user has access to this exam
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this exam"
+      });
+    }
+
+    console.log("✅ Exam details loaded for teacher session:", exam.title);
+
+    res.json({
+      success: true,
+      data: exam
+    });
+
+  } catch (err) {
+    console.error("❌ Get exam details error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load exam details"
+=======
+    const classData = await Class.findById(exam.classId);
+    if (!classData || classData.ownerId.toString() !== teacherId) {
+      return res.status(403).json({
+        success: false,
+        message: "Only teachers can view violation details"
+      });
+    }
+
+    // Get student attempts
+    const studentAttempts = await StudentAttempts.findOne({
+      studentId: studentId,
+      examId: examId
+    });
+
+    if (!studentAttempts) {
+      return res.json({
+        success: true,
+        data: {
+          studentId: studentId,
+          violationsByType: {},
+          totalViolations: 0,
+          attempts: {
+            current: 0,
+            max: 10,
+            left: 10
+          }
+        }
+      });
+    }
+
+    // ✅ CRITICAL: Group violations by type
+    const violationsByType = {};
+    
+    studentAttempts.history.forEach(violation => {
+      const type = violation.violationType || 'unknown';
+      
+      if (!violationsByType[type]) {
+        violationsByType[type] = {
+          count: 0,
+          violations: [],
+          latestTimestamp: null
+        };
+      }
+      
+      violationsByType[type].count += (violation.count || 1);
+      violationsByType[type].violations.push({
+        timestamp: violation.timestamp,
+        message: violation.message,
+        severity: violation.severity,
+        confidence: violation.confidence,
+        attemptsUsed: violation.attemptsUsed,
+        attemptsLeft: violation.attemptsLeft
+      });
+      
+      // Update latest timestamp
+      if (!violationsByType[type].latestTimestamp || 
+          new Date(violation.timestamp) > new Date(violationsByType[type].latestTimestamp)) {
+        violationsByType[type].latestTimestamp = violation.timestamp;
+      }
+    });
+
+    // Sort types by count (descending)
+    const sortedViolations = Object.entries(violationsByType)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([type, data]) => ({
+        type: type,
+        count: data.count,
+        latestTimestamp: data.latestTimestamp,
+        example: data.violations[0]?.message || `${type} violation`
+      }));
+
+    // Get student info
+    const student = await User.findById(studentId).select('name email');
+    
+    // Get completion data
+    const completion = exam.completedBy.find(c => {
+      const compStudentId = c.studentId?._id || c.studentId;
+      return compStudentId && compStudentId.toString() === studentId;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        student: {
+          _id: student._id,
+          name: student.name,
+          email: student.email
+        },
+        exam: {
+          _id: exam._id,
+          title: exam.title,
+          examType: exam.examType
+        },
+        violationsByType: sortedViolations,
+        totalViolations: studentAttempts.currentAttempts,
+        attempts: {
+          current: studentAttempts.currentAttempts,
+          max: studentAttempts.maxAttempts,
+          left: studentAttempts.attemptsLeft
+        },
+        completion: completion ? {
+          score: completion.score,
+          maxScore: completion.maxScore,
+          percentage: completion.percentage,
+          submittedAt: completion.submittedAt
+        } : null,
+        violationHistory: studentAttempts.history.sort((a, b) => 
+          new Date(b.timestamp) - new Date(a.timestamp)
+        )
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Get violation details error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get violation details"
+>>>>>>> backupRepo/main
+    });
+  }
+});
+
+<<<<<<< HEAD
+=======
+// ===== QUIZ COMMENT ROUTES =====
+
+// ✅ GET comments for a specific quiz/exam
+router.get("/:examId/comments", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    
+    console.log("🎯 GET QUIZ COMMENTS ROUTE HIT:", examId);
+
+    const exam = await Exam.findById(examId)
+      .populate("comments.author", "name email profileImage role")
+      .select("comments");
+    
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+    
+    // Check if user has access to this exam
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to access this quiz"
+      });
+    }
+    
+    // Sort comments by creation date (newest first)
+    const sortedComments = exam.comments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    res.json({
+      success: true,
+      data: sortedComments
+    });
+  } catch (err) {
+    console.error("❌ Get quiz comments error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch comments"
+    });
+  }
+});
+
+// ✅ ADD comment to quiz/exam
+router.post("/:examId/comments", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const { content } = req.body;
+    
+    if (!content || !content.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Comment content is required"
+      });
+    }
+    
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+    
+    // Check if user has access to this exam
+    const classData = await Class.findById(exam.classId);
+    const hasAccess = classData && (
+      classData.ownerId.toString() === req.user.id ||
+      classData.members.some(m => m.userId && m.userId.toString() === req.user.id)
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to comment on this quiz"
+      });
+    }
+    
+    const newComment = {
+      content: content.trim(),
+      author: req.user.id,
+      role: req.user.role || "student",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    exam.comments.push(newComment);
+    await exam.save();
+    
+    // Populate author info for response
+    await exam.populate("comments.author", "name email profileImage role");
+    
+    const addedComment = exam.comments[exam.comments.length - 1];
+    
+    res.json({
+      success: true,
+      message: "Comment added successfully",
+      data: addedComment
+    });
+  } catch (err) {
+    console.error("❌ Add comment error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add comment"
+    });
+  }
+});
+
+// ✅ DELETE comment from quiz/exam
+router.delete("/:examId/comments/:commentId", async (req, res) => {
+  try {
+    const { examId, commentId } = req.params;
+    
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+    
+    const comment = exam.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: "Comment not found"
+      });
+    }
+    
+    // Check if user is authorized to delete (author or teacher)
+    const isAuthor = comment.author.toString() === req.user.id;
+    const isTeacher = req.user.role === "teacher";
+    
+    if (!isAuthor && !isTeacher) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to delete this comment"
+      });
+    }
+    
+    exam.comments.pull(commentId);
+    await exam.save();
+    
+    res.json({
+      success: false,
+      message: "Comment deleted successfully"
+    });
+  } catch (err) {
+    console.error("❌ Delete comment error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete comment"
+    });
+  }
+});
+
+// ✅ TEST COMMENTS ENDPOINT
+router.get("/test-comments/:examId", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    
+    console.log("🧪 TESTING COMMENTS ENDPOINT FOR EXAM:", examId);
+    
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: "Comments endpoint is working!",
+      examId: examId,
+      hasCommentsField: exam.comments !== undefined,
+      commentsCount: exam.comments ? exam.comments.length : 0,
+      user: req.user
+    });
+    
+  } catch (err) {
+    console.error("❌ Test comments error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Test failed",
+      error: err.message
+    });
+  }
+});
+
+// ===== VIOLATION SUMMARY ROUTES =====
+
+// ✅ GET VIOLATION SUMMARY FOR AN EXAM
+router.get("/:examId/violation-summary", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const teacherId = req.user.id;
+
+    console.log("📊 GET VIOLATION SUMMARY ROUTE HIT:", { examId, teacherId });
+
+    // Validate examId
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid exam ID format"
+      });
+    }
+
+    const exam = await Exam.findById(examId)
+      .populate('completedBy.studentId', 'name email')
+      .populate('classId', 'name ownerId');
+
+    if (!exam) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found"
+      });
+    }
+
+    // Check if user is teacher for this class
+    const classData = exam.classId;
+    if (!classData || classData.ownerId.toString() !== teacherId) {
+      return res.status(403).json({
+        success: false,
+        message: "Only teachers can view violation summaries"
+      });
+    }
+
+    // Get all students in the class
+    const classStudents = await Class.findById(exam.classId).populate('members.userId', 'name email');
+
+    // Get student attempts for this exam
+    const studentAttempts = await StudentAttempts.find({ examId })
+      .populate('studentId', 'name email')
+      .sort({ 'history.timestamp': -1 });
+
+    console.log(`📊 Found ${studentAttempts.length} student attempts for exam`);
+
+    // Get violation data from StudentExamSession (if you have it) or from StudentAttempts
+    let examSessions = [];
+    
+    try {
+      const StudentExamSession = require('../models/StudentExamSession');
+      examSessions = await StudentExamSession.find({ examId })
+        .populate('studentId', 'name email');
+      console.log(`📊 Found ${examSessions.length} exam sessions`);
+    } catch (error) {
+      console.log("⚠️ StudentExamSession model not available, using only attempts");
+    }
+
+    // Combine data from StudentAttempts and StudentExamSession
+    const studentsData = [];
+
+    // Process each student in the class
+    const allStudents = classStudents.members.filter(m => m.role === 'student').map(m => m.userId);
+    
+    for (const student of allStudents) {
+      const studentAttempt = studentAttempts.find(a => 
+        a.studentId && a.studentId._id.toString() === student._id.toString()
+      );
+      const studentSession = examSessions.find(s => 
+        s.studentId && s.studentId._id.toString() === student._id.toString()
+      );
+      
+      // Get violations from StudentAttempts history
+      const violations = studentAttempt ? studentAttempt.history.map(v => ({
+        type: v.violationType || 'unknown',
+        severity: v.severity || 'medium',
+        timestamp: v.timestamp,
+        message: v.message || 'Violation detected',
+        detectionSource: v.detectionSource || 'auto',
+        confidence: 0.8 // Default confidence
+      })) : [];
+
+      // Add session-specific violations if available
+      if (studentSession && studentSession.violations) {
+        studentSession.violations.forEach(v => {
+          violations.push({
+            type: v.type || 'unknown',
+            severity: v.severity || 'medium',
+            timestamp: v.timestamp || new Date(),
+            message: v.message || 'Session violation',
+            detectionSource: 'session',
+            confidence: v.confidence || 0.7,
+            screenshot: v.screenshot
+          });
+        });
+      }
+
+      // Get completion data
+      const completion = exam.completedBy.find(c => {
+        const studentId = c.studentId?._id || c.studentId;
+        return studentId && studentId.toString() === student._id.toString();
+      });
+
+      studentsData.push({
+        _id: student._id,
+        name: student.name || 'Unknown Student',
+        email: student.email,
+        violations: violations.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)), // Newest first
+        hasCompleted: !!completion,
+        score: completion?.score || 0,
+        maxScore: completion?.maxScore || exam.totalPoints,
+        percentage: completion?.percentage || 0,
+        submittedAt: completion?.submittedAt || completion?.completedAt,
+        status: completion ? 'completed' : 'not_started',
+        attemptsUsed: studentAttempt?.currentAttempts || 0,
+        attemptsLeft: studentAttempt?.attemptsLeft || studentAttempt?.maxAttempts || 0
+      });
+    }
+
+    console.log(`📊 Prepared violation summary for ${studentsData.length} students`);
+
+    res.json({
+      success: true,
+      data: {
+        exam: {
+          _id: exam._id,
+          title: exam.title,
+          examType: exam.examType,
+          totalPoints: exam.totalPoints,
+          isLiveClass: exam.isLiveClass
+        },
+        students: studentsData,
+        summary: {
+          totalStudents: studentsData.length,
+          completed: studentsData.filter(s => s.hasCompleted).length,
+          averageScore: studentsData.filter(s => s.hasCompleted).length > 0 
+            ? (studentsData.filter(s => s.hasCompleted).reduce((sum, s) => sum + s.score, 0) / 
+               studentsData.filter(s => s.hasCompleted).reduce((sum, s) => sum + s.maxScore, 0)) * 100
+            : 0,
+          totalViolations: studentsData.reduce((sum, s) => sum + s.violations.length, 0),
+          mostCommonViolation: getMostCommonViolation(studentsData)
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error("❌ Get violation summary error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get violation summary",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// Helper function to find most common violation
+function getMostCommonViolation(studentsData) {
+  const violationCounts = {};
+  
+  studentsData.forEach(student => {
+    student.violations.forEach(violation => {
+      violationCounts[violation.type] = (violationCounts[violation.type] || 0) + 1;
+    });
+  });
+  
+  const mostCommon = Object.entries(violationCounts).sort((a, b) => b[1] - a[1])[0];
+  
+  return mostCommon ? {
+    type: mostCommon[0],
+    count: mostCommon[1]
+  } : { type: 'none', count: 0 };
+}
+
+// ===== TEST ROUTE =====
+router.get("/test-session-routes", async (req, res) => {
+  console.log("✅ TEST ROUTE HIT - Session routes are working");
+  res.json({
+    success: true,
+    message: "Session routes are working correctly",
+    user: req.user,
+    availableRoutes: [
+      "POST /api/exams/:examId/start-session",
+      "POST /api/exams/:examId/end-session", 
+      "POST /api/exams/:examId/join",
+      "GET /api/exams/:examId/session-status"
+    ],
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ===== EXAM SESSION ROUTES =====
+
+// ✅ DEBUG ENDPOINT
+router.get("/debug/token-check", (req, res) => {
+  console.log("✅ Token is valid for user:", req.user);
+  res.json({
+    success: true,
+    message: "Token is valid",
+    user: req.user
+  });
+});
+
+// ✅ GET EXAM DETAILS
+router.get("/:examId/details", async (req, res) => {
+  try {
+    const { examId } = req.params;
+    
+    console.log("🎯 GET EXAM DETAILS ROUTE HIT:", examId);
+    console.log("🔍 User ID:", req.user.id);
+
+    // Validate examId
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid exam ID format"
+      });
+    }
+
+    const exam = await Exam.findById(examId).populate('classId');
     if (!exam) {
       return res.status(404).json({
         success: false,
@@ -328,6 +1032,7 @@ router.get("/:examId/details", async (req, res) => {
   }
 });
 
+>>>>>>> backupRepo/main
 // ✅ START EXAM SESSION
 router.post("/:examId/start-session", async (req, res) => {
   try {
@@ -1267,7 +1972,11 @@ router.post("/create/:classId", async (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 // ✅ UPDATE QUIZ QUESTIONS - UPDATED WITH EXAM TYPE
+=======
+// ✅ UPDATE QUIZ QUESTIONS - UPDATED WITH EXAM TYPE AND SCHEDULED AT
+>>>>>>> backupRepo/main
 router.put("/:examId/quiz-questions", async (req, res) => {
   try {
     const { examId } = req.params;
@@ -1281,10 +1990,18 @@ router.put("/:examId/quiz-questions", async (req, res) => {
       totalPoints,
       examType, // ✅ ADDED
       timeLimit, // ✅ ADDED
+<<<<<<< HEAD
       isLiveClass // ✅ ADDED
     } = req.body;
 
     console.log("🎯 UPDATE QUIZ QUESTIONS ROUTE HIT:", examId, "Exam Type:", examType);
+=======
+      isLiveClass, // ✅ ADDED
+      scheduledAt // ✅ ADDED - New scheduledAt field
+    } = req.body;
+
+    console.log("🎯 UPDATE QUIZ QUESTIONS ROUTE HIT:", examId, "Exam Type:", examType, "Scheduled At:", scheduledAt);
+>>>>>>> backupRepo/main
 
     // Validate examId
     if (!mongoose.Types.ObjectId.isValid(examId)) {
@@ -1335,6 +2052,18 @@ router.put("/:examId/quiz-questions", async (req, res) => {
       updateData.timeLimit = timeLimit;
     }
     if (isLiveClass !== undefined) updateData.isLiveClass = isLiveClass;
+<<<<<<< HEAD
+=======
+    
+    // ✅ ADDED: Handle scheduledAt field
+    if (scheduledAt !== undefined) {
+      updateData.scheduledAt = scheduledAt;
+      if (scheduledAt > new Date()) {
+        updateData.status = 'scheduled';
+      }
+    }
+    
+>>>>>>> backupRepo/main
     if (isPublished !== undefined) {
       updateData.isPublished = isPublished;
       if (isPublished && !exam.publishedAt) {
@@ -1348,7 +2077,11 @@ router.put("/:examId/quiz-questions", async (req, res) => {
       { new: true, runValidators: true }
     );
 
+<<<<<<< HEAD
     console.log("✅ Quiz updated successfully:", examId, "Type:", updatedExam.examType);
+=======
+    console.log("✅ Quiz updated successfully:", examId, "Type:", updatedExam.examType, "Scheduled At:", updatedExam.scheduledAt);
+>>>>>>> backupRepo/main
 
     res.json({
       success: true,
@@ -1949,10 +2682,403 @@ router.get("/health", (req, res) => {
       // ✅ LIVE CLASS ROUTES
       "POST /:examId/start-live-class",
       "POST /:examId/join-live-class",
+<<<<<<< HEAD
       "POST /:examId/end-live-class"
+=======
+      "POST /:examId/end-live-class",
+      // ✅ VIOLATION SUMMARY ROUTE
+      "GET /:examId/violation-summary",
+      // ✅ NEW VIOLATION LOGGING ROUTES
+      "POST /log-violation",
+      "GET /:examId/violation-details/:studentId"
+>>>>>>> backupRepo/main
     ],
     timestamp: new Date().toISOString()
   });
+});
+
+<<<<<<< HEAD
+// ===== HELPER FUNCTIONS =====
+function parseFormattedDocument(text) {
+  console.log("🔄 STARTING ENHANCED PARSING...");
+  
+  const questions = [];
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+  
+  let currentQuestion = null;
+  let questionCounter = 0;
+
+  console.log("📄 Total lines to process:", lines.length);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    console.log(`📖 Line ${i}: "${line}"`);
+
+    // Skip empty lines
+    if (!line) continue;
+
+    // Detect question with number (1., 2., etc.)
+    const questionMatch = line.match(/^(\d+)\.\s*(.+)$/);
+    if (questionMatch) {
+      // Save previous question
+      if (currentQuestion) {
+        questions.push(currentQuestion);
+        console.log("💾 Saved question:", {
+          title: currentQuestion.title?.substring(0, 30),
+          type: currentQuestion.type,
+          options: currentQuestion.options,
+          answer: currentQuestion.correctAnswer ?? currentQuestion.correctAnswers ?? currentQuestion.answerKey
+        });
+      }
+      
+      questionCounter++;
+      currentQuestion = {
+        type: 'multiple-choice', // default type
+        title: questionMatch[2],
+        required: false,
+        points: 1,
+        options: [],
+        correctAnswer: null,
+        correctAnswers: [],
+        answerKey: '',
+        order: questionCounter - 1
+      };
+      
+      console.log("❓ New question started:", currentQuestion.title.substring(0, 50));
+      continue;
+    }
+
+    // Detect options (A), B), C), D) - FIXED REGEX
+    const optionMatch = line.match(/^([A-D])[\)\.]\s*(.+)$/i);
+    if (optionMatch && currentQuestion) {
+      const optionText = optionMatch[2].trim();
+      currentQuestion.options.push(optionText);
+      console.log("📝 Added option:", optionMatch[1], optionText);
+      continue;
+    }
+
+    // Detect ANSWER (single choice) - CASE INSENSITIVE
+    const answerMatch = line.match(/^ANSWER:\s*(.+)$/i);
+    if (answerMatch && currentQuestion) {
+      const answerValue = answerMatch[1].trim();
+      console.log("🎯 Processing ANSWER:", answerValue);
+      
+      // Check if there are options to determine question type
+      if (currentQuestion.options.length > 0) {
+        // Has options = multiple choice or checkboxes
+        if (answerValue.includes(',')) {
+          // Multiple answers = checkboxes
+          const answers = answerValue.split(',').map(a => a.trim().toUpperCase());
+          const answerIndices = answers.map(a => 'ABCD'.indexOf(a)).filter(idx => idx !== -1);
+          
+          if (answerIndices.length > 0) {
+            currentQuestion.correctAnswers = answerIndices;
+            currentQuestion.type = 'checkboxes';
+            console.log("✅ Set CHECKBOX answers:", answers, "-> indices:", answerIndices);
+          }
+        } else {
+          // Single answer = multiple choice
+          const answerIndex = 'ABCD'.indexOf(answerValue.toUpperCase());
+          if (answerIndex !== -1) {
+            currentQuestion.correctAnswer = answerIndex;
+            currentQuestion.type = 'multiple-choice';
+            console.log("✅ Set MULTIPLE-CHOICE answer:", answerValue, "-> index:", answerIndex);
+          } else {
+            console.log("❌ Invalid answer for multiple-choice:", answerValue);
+          }
+        }
+=======
+// ===== ASYNC EXAM TIMER MANAGEMENT =====
+// Ilagay ito SA BABA bago ang module.exports
+
+router.post('/:examId/start-async-timer', async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const { totalSeconds } = req.body;
+    
+    const exam = await Exam.findById(examId);
+    if (!exam) return res.status(404).json({ error: 'Exam not found' });
+    
+    // ✅ GUMAWA NG EXACT END TIME
+    const endsAt = new Date(Date.now() + (totalSeconds * 1000));
+    
+    exam.timerSettings = {
+      hours: Math.floor(totalSeconds / 3600),
+      minutes: Math.floor((totalSeconds % 3600) / 60),
+      seconds: totalSeconds % 60,
+      totalSeconds: totalSeconds,
+      startedAt: new Date(),
+      endsAt: endsAt,
+      isRunning: true
+    };
+    
+    await exam.save();
+    
+    res.json({ 
+      success: true, 
+      message: 'Async timer started',
+      endsAt: endsAt.toISOString(),
+      totalSeconds: totalSeconds
+    });
+    
+  } catch (error) {
+    console.error('Error starting async timer:', error);
+    res.status(500).json({ error: 'Failed to start timer' });
+  }
+});
+
+router.get('/:examId/check-time', async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const exam = await Exam.findById(examId);
+    
+    if (!exam || !exam.timerSettings || !exam.timerSettings.endsAt) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Timer not found or not started',
+        shouldStart: true
+      });
+    }
+    
+    const now = new Date();
+    const endsAt = new Date(exam.timerSettings.endsAt);
+    
+    // ✅ KUNG NAG-END NA, AUTOMATIC NA MAG-END
+    if (now >= endsAt) {
+      return res.json({
+        success: true,
+        remainingSeconds: 0,
+        endsAt: endsAt,
+        isRunning: false,
+        examEnded: true,
+        totalSeconds: exam.timerSettings.totalSeconds
+      });
+    }
+    
+    const remainingSeconds = Math.max(0, Math.floor((endsAt - now) / 1000));
+    
+    res.json({
+      success: true,
+      remainingSeconds: remainingSeconds,
+      endsAt: endsAt,
+      isRunning: remainingSeconds > 0,
+      examEnded: false,
+      totalSeconds: exam.timerSettings.totalSeconds
+    });
+    
+  } catch (error) {
+    console.error('Error checking time:', error);
+    res.status(500).json({ error: 'Failed to check time' });
+  }
+});
+
+// ✅ ADD ROUTE TO GET EXAM TYPE
+router.get('/:examId/type', async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const exam = await Exam.findById(examId).select('examType timerSettings timeLimit');
+    
+    if (!exam) {
+      return res.status(404).json({ error: 'Exam not found' });
+    }
+    
+    res.json({
+      success: true,
+      examType: exam.examType || 'asynchronous',
+      timerSettings: exam.timerSettings || null,
+      timeLimit: exam.timeLimit || 60
+    });
+  } catch (error) {
+    console.error('Error getting exam type:', error);
+    res.status(500).json({ error: 'Failed to get exam type' });
+  }
+});
+
+// ✅ FIXED: EXPORT GRADES TO EXCEL (NOW EXCLUDES TEACHERS)
+router.get("/:classId/export-grades", async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const teacherId = req.user.id;
+
+    console.log("📊 EXPORT GRADES ROUTE HIT:", { classId, teacherId });
+
+    // Validate classId
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid class ID format"
+      });
+    }
+
+    // Check if user is teacher for this class
+    const classData = await Class.findById(classId);
+    if (!classData) {
+      return res.status(404).json({
+        success: false,
+        message: "Class not found"
+      });
+    }
+
+    if (classData.ownerId.toString() !== teacherId) {
+      return res.status(403).json({
+        success: false,
+        message: "Only teachers can export grades"
+      });
+    }
+
+    // ✅ FIXED: Get ONLY STUDENTS in class (exclude teachers)
+    const allMembers = classData.members || [];
+    
+    // Filter to get only students
+    const studentMembers = allMembers.filter(member => {
+      // Check if role is explicitly 'student'
+      if (member.role && member.role === "student") {
+        return true;
+      }
+      
+      // If role is undefined but they're not the teacher, assume student
+      if (!member.role && member.userId && member.userId.toString() !== classData.ownerId.toString()) {
+        return true;
+      }
+      
+      return false;
+    });
+
+    console.log("👥 Member filtering:", {
+      totalMembers: allMembers.length,
+      teacherId: classData.ownerId.toString(),
+      studentMembersCount: studentMembers.length,
+      teacherName: "J (teacher should be excluded)"
+    });
+
+    // Get student user details
+    const studentIds = studentMembers.map(m => m.userId);
+    let students = await User.find({ 
+      _id: { $in: studentIds } 
+    }).select('name email _id role');
+
+    // ✅ FINAL SANITY CHECK: Remove teacher if somehow included
+    students = students.filter(student => 
+      student._id.toString() !== classData.ownerId.toString()
+    );
+
+    console.log(`📊 Preparing export: ${students.length} students (teachers excluded), ${students.map(s => s.name)}`);
+
+    // Get all exams for this class
+    const exams = await Exam.find({ classId: classId })
+      .select('title totalPoints completedBy')
+      .populate('completedBy.studentId', 'name email');
+
+    console.log(`📊 Found ${exams.length} exams for export`);
+
+    // Format data for Excel
+    const exportData = {
+      headers: ['Student Name', 'Email'],
+      rows: [],
+      exams: exams.map(exam => ({
+        id: exam._id.toString(),
+        title: exam.title,
+        totalPoints: exam.totalPoints
+      }))
+    };
+
+    // Add exam headers
+    exams.forEach(exam => {
+      exportData.headers.push(`${exam.title} (${exam.totalPoints} points)`);
+    });
+    exportData.headers.push('Total Score', 'Average Percentage');
+
+    // Process each student
+    students.forEach(student => {
+      const row = [student.name || 'Unnamed Student', student.email || 'No email'];
+      let totalScore = 0;
+      let totalPossible = 0;
+      let examsTaken = 0;
+
+      exams.forEach(exam => {
+        const submission = exam.completedBy.find(sub => {
+          const studentId = sub.studentId?._id || sub.studentId;
+          return studentId && studentId.toString() === student._id.toString();
+        });
+
+        if (submission) {
+          const score = submission.score || 0;
+          const maxScore = submission.maxScore || exam.totalPoints || 0;
+          const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
+          
+          row.push(`${score}/${maxScore} (${percentage.toFixed(2)}%)`);
+          totalScore += score;
+          totalPossible += maxScore;
+          examsTaken++;
+        } else {
+          row.push('Not submitted');
+        }
+      });
+
+      // Calculate totals
+      const totalPercentage = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
+      row.push(totalScore.toString(), `${totalPercentage.toFixed(2)}%`);
+
+      exportData.rows.push(row);
+    });
+
+    // Add class summary row
+    const summaryRow = ['CLASS SUMMARY', '', ...Array(exams.length).fill('---')];
+    
+    if (students.length > 0) {
+      // Calculate class averages per exam
+      const examAverages = exams.map(exam => {
+        const submissions = exam.completedBy || [];
+        if (submissions.length === 0) return 'No submissions';
+        
+        const totalScore = submissions.reduce((sum, sub) => sum + (sub.score || 0), 0);
+        const totalPossible = submissions.reduce((sum, sub) => 
+          sum + (sub.maxScore || exam.totalPoints || 0), 0
+        );
+        
+        const averagePercentage = totalPossible > 0 ? (totalScore / totalPossible) * 100 : 0;
+        return `${averagePercentage.toFixed(2)}%`;
+      });
+
+      summaryRow.splice(2, exams.length, ...examAverages);
+      
+      // Overall class average
+      const overallAverage = exportData.rows.reduce((sum, row) => {
+        const percentage = parseFloat(row[row.length - 1].replace('%', ''));
+        return sum + (isNaN(percentage) ? 0 : percentage);
+      }, 0) / students.length;
+
+      summaryRow.push('---', `${overallAverage.toFixed(2)}%`);
+    } else {
+      summaryRow.push('---', 'No students');
+    }
+
+    exportData.rows.push([]); // Empty row for separation
+    exportData.rows.push(summaryRow);
+
+    res.json({
+      success: true,
+      message: "Grades data prepared for export",
+      data: exportData,
+      metadata: {
+        classId: classId,
+        className: classData.name,
+        studentCount: students.length,
+        examCount: exams.length,
+        exportedAt: new Date().toISOString(),
+        teacherExcluded: true, // ✅ Added to confirm teacher is excluded
+        studentsExported: students.map(s => s.name)
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Export grades error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to export grades",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 });
 
 // ===== HELPER FUNCTIONS =====
@@ -2044,6 +3170,7 @@ function parseFormattedDocument(text) {
             console.log("❌ Invalid answer for multiple-choice:", answerValue);
           }
         }
+>>>>>>> backupRepo/main
       } else {
         // No options = text answer
         currentQuestion.answerKey = answerValue;
@@ -2188,6 +3315,7 @@ const parseDOCX = async (filePath) => {
   }
 };
 
+<<<<<<< HEAD
 // ===== ASYNC EXAM TIMER MANAGEMENT =====
 // Ilagay ito SA BABA bago ang module.exports
 // routes/examRoutes.js o kung saan man
@@ -2329,4 +3457,6 @@ router.get('/:examId/type', async (req, res) => {
 
 
 
+=======
+>>>>>>> backupRepo/main
 module.exports = router;

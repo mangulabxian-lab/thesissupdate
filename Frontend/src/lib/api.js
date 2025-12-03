@@ -324,6 +324,24 @@ export const getExamDetails = async (examId) => {
   return response.data;
 };
 
+<<<<<<< HEAD
+=======
+// ===== VIOLATION SUMMARY API =====
+export const getViolationSummary = async (examId) => {
+  try {
+    console.log('📊 Fetching violation summary for exam:', examId);
+    const response = await api.get(`/exams/${examId}/violation-summary`);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Failed to fetch violation summary:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || 'Failed to fetch violation summary'
+    };
+  }
+};
+
+>>>>>>> backupRepo/main
 // ===== COMPLETION TRACKING API =====
 export const markExamAsCompleted = async (examId, completionData) => {
   const response = await api.post(`/exams/${examId}/complete`, completionData);
@@ -356,6 +374,7 @@ export const getQuizForStudent = async (examId) => {
   }
 };
 
+<<<<<<< HEAD
 // api.js - FIX THE submitQuizAnswers FUNCTION
 export const submitQuizAnswers = async (examId, answers) => {
   try {
@@ -400,6 +419,16 @@ export const submitQuizAnswers = async (examId, answers) => {
       success: false,
       message: error.response?.data?.message || "Failed to submit answers.",
       error: error.response?.data || error.message
+=======
+export const submitQuizAnswers = async (examId, answers) => {
+  try {
+    const response = await api.post(`/exams/${examId}/submit`, { answers });
+    return response.data;
+  } catch (error) {
+    return {
+      success: false,
+      message: error.response?.data?.message || "Failed to submit answers."
+>>>>>>> backupRepo/main
     };
   }
 };

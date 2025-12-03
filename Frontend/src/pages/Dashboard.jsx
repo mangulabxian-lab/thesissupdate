@@ -1,5 +1,9 @@
 // src/components/Dashboard.jsx - UPDATED WITH REAL-TIME LIVE CLASS SUPPORT
+<<<<<<< HEAD
 import { useState, useEffect, useRef, useCallback } from "react";
+=======
+import React, { useState, useEffect, useRef, useCallback } from "react"; // ✅ ADDED React import
+>>>>>>> backupRepo/main
 import { useNavigate, useLocation } from "react-router-dom";
 import { FaPlus, FaHome, FaCalendarAlt, FaArchive, FaCog, FaSignOutAlt, FaBook, FaUserPlus, FaBars, FaChevronLeft, FaChevronRight, FaEdit, FaTrash, FaEllipsisV, FaChevronDown, FaEnvelope, FaUserMinus, FaVolumeMute, FaVolumeUp, FaSave, FaTimes, FaCheckCircle, FaClock, FaExclamationTriangle } from "react-icons/fa";
 import api, { 
@@ -10,9 +14,16 @@ import api, {
 } from "../lib/api";
 import "./Dashboard.css";
 import io from 'socket.io-client'; // ✅ ADDED: Import socket.io for real-time updates
+<<<<<<< HEAD
 
 // ✅ NOTIFICATION BELL IMPORT REMOVED
 // ✅ CHATFORUM IMPORT REMOVED
+=======
+import * as XLSX from 'xlsx'; // ✅ ADDED: Import for Excel export
+
+// ✅ ADDED: Import ViolationSummaryModal
+import ViolationSummaryModal from '../components/ViolationSummaryModal';
+>>>>>>> backupRepo/main
 
 // Utility function to format exam type display
 const getExamTypeDisplay = (exam) => {
@@ -28,8 +39,13 @@ const getExamTypeDisplay = (exam) => {
     const timeLimit = exam.timeLimit || 60;
     return {
       type: 'async',
+<<<<<<< HEAD
       label: `⏱️ ${timeLimit} min`,
       icon: '⏱️',
+=======
+      label: ` ${timeLimit} min`,
+      icon: '',
+>>>>>>> backupRepo/main
       color: 'bg-green-100 text-green-800 border border-green-200'
     };
   }
@@ -287,6 +303,13 @@ export default function Dashboard() {
   const [todoActiveTab, setTodoActiveTab] = useState("assigned");
   const [todoLoading, setTodoLoading] = useState(false);
 
+<<<<<<< HEAD
+=======
+  // ===== VIOLATION SUMMARY MODAL STATE =====
+  const [showViolationSummary, setShowViolationSummary] = useState(false);
+  const [selectedExamForSummary, setSelectedExamForSummary] = useState(null);
+
+>>>>>>> backupRepo/main
   // ===== REFS FOR CLICK OUTSIDE DETECTION =====
   const userDropdownRef = useRef(null);
   const createJoinDropdownRef = useRef(null);
@@ -302,6 +325,123 @@ export default function Dashboard() {
   const enrolledClasses = classes.filter(classData => classData.userRole === "student" || !classData.isTeacher);
   const allClasses = [...classes];
 
+<<<<<<< HEAD
+=======
+  // ===== VIOLATION SUMMARY HANDLER =====
+  const handleViewViolationSummary = (exam) => {
+    console.log('📊 Viewing violation summary for exam:', exam._id, exam.title);
+    setSelectedExamForSummary(exam);
+    setShowViolationSummary(true);
+  };
+
+  // ===== FIXED: JOIN CLASS FUNCTION WITH BETTER ERROR HANDLING =====
+  const joinClass = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api.post("/class/join", { code: joinCode });
+      console.log('Join class response:', res.data);
+      
+      if (res.data.success) {
+        const joinedClass = res.data.data || res.data;
+        setClasses(prev => [...prev, { ...joinedClass, userRole: "student" }]);
+        setJoinCode("");
+        setShowJoinModal(false);
+        alert("✅ Successfully joined class!");
+        
+        // Refresh the classes list
+        try {
+          const classesRes = await api.get("/class/my-classes");
+          const classesData = classesRes.data.data || classesRes.data;
+          setClasses(classesData);
+        } catch (refreshError) {
+          console.error("Failed to refresh classes:", refreshError);
+        }
+      } else {
+        alert("❌ Failed to join class: " + res.data.message);
+      }
+    } catch (error) {
+      console.error("Join class error:", error);
+      alert("❌ Failed to join class: " + (error.response?.data?.message || "Invalid class code or server error"));
+    }
+  };
+
+  // ✅ ADDED: Excel Export Function
+  const exportGradesToExcel = async () => {
+    if (!selectedClass) return;
+    
+    try {
+      console.log("📤 Exporting grades for class:", selectedClass._id);
+      
+      // Show loading state
+      const response = await api.get(`/exams/${selectedClass._id}/export-grades`);
+      
+      if (response.data.success) {
+        const { data, metadata } = response.data;
+        
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Create worksheet
+        const ws = XLSX.utils.aoa_to_sheet([
+          // Header row 1: Class info
+          [`${metadata.className} - Grades Report`],
+          [`Exported on: ${new Date(metadata.exportedAt).toLocaleString()}`],
+          [`Students: ${metadata.studentCount} | Exams: ${metadata.examCount}`],
+          [], // Empty row
+          // Data headers
+          data.headers
+        ]);
+        
+        // Add student data
+        XLSX.utils.sheet_add_aoa(ws, data.rows, { origin: -1 });
+        
+        // Set column widths
+        const colWidths = data.headers.map((_, index) => ({
+          wch: index === 0 ? 25 : index === 1 ? 30 : 20
+        }));
+        ws['!cols'] = colWidths;
+        
+        // Add styles (bold header)
+        if (!ws['!merges']) ws['!merges'] = [];
+        ws['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: data.headers.length - 1 } });
+        
+        // Add to workbook
+        XLSX.utils.book_append_sheet(wb, ws, "Grades");
+        
+        // Create summary sheet
+        const summaryWs = XLSX.utils.aoa_to_sheet([
+          ["Class Summary", metadata.className],
+          ["Class Code", selectedClass.code],
+          ["Teacher", user.name],
+          ["Export Date", new Date(metadata.exportedAt).toLocaleString()],
+          [],
+          ["Statistics", "Value"],
+          ["Total Students", metadata.studentCount],
+          ["Total Exams", metadata.examCount],
+          [],
+          ["Exam List", "Total Points"],
+          ...data.exams.map(exam => [exam.title, exam.totalPoints])
+        ]);
+        
+        XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
+        
+        // Generate filename
+        const fileName = `Grades_${metadata.className.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        // Save file
+        XLSX.writeFile(wb, fileName);
+        
+        alert(`✅ Grades exported successfully! File: ${fileName}`);
+      } else {
+        throw new Error(response.data.message || "Failed to export grades");
+      }
+    } catch (error) {
+      console.error("❌ Export error:", error);
+      alert(`❌ Failed to export grades: ${error.message}`);
+    }
+  };
+
+>>>>>>> backupRepo/main
   // ✅ ADDED: Real-time socket connection for live classes
   useEffect(() => {
     if (!selectedClass || !selectedClass._id) return;
@@ -904,7 +1044,10 @@ export default function Dashboard() {
 
   // ✅ UPDATED: QUIZ ACTION HANDLER WITH ENHANCED SOCKET SUPPORT =====
   // ✅ UPDATED: QUIZ ACTION HANDLER WITH ENHANCED SOCKET SUPPORT
+<<<<<<< HEAD
 // Sa Dashboard.jsx - I-UPDATE ang handleQuizAction function para sa student
+=======
+>>>>>>> backupRepo/main
 const handleQuizAction = (exam) => {
   const examTypeDisplay = getExamTypeDisplay(exam);
   const actionButton = getExamActionButton(exam, selectedClass?.userRole, user._id);
@@ -932,16 +1075,36 @@ const handleQuizAction = (exam) => {
       }
     }
   } else {
+<<<<<<< HEAD
     // ✅ STUDENT ACTIONS - ENHANCED WITH WAITING ROOM
     if (actionButton.action === 'review') {
+=======
+    // Student actions
+    if (actionButton.action === 'review') {
+      // Navigate to review answers
+>>>>>>> backupRepo/main
       navigate(`/review-exam/${exam._id}`);
       return;
     }
     
     if (exam.examType === 'live-class') {
+<<<<<<< HEAD
       // ✅ LIVE CLASS - DAPAT MAY WAITING ROOM
       if (exam.isActive) {
         // Navigate to StudentQuizPage WITH WAITING ROOM STATE
+=======
+      // Live class logic remains the same
+      if (exam.isActive) {
+        if (socketRef.current) {
+          socketRef.current.emit('student-joining-live-class', {
+            examId: exam._id,
+            classId: selectedClass._id,
+            studentId: user._id,
+            studentName: user.name
+          });
+        }
+        
+>>>>>>> backupRepo/main
         navigate(`/student-quiz/${exam._id}`, {
           state: {
             isLiveClass: true,
@@ -949,6 +1112,7 @@ const handleQuizAction = (exam) => {
             requiresMicrophone: true,
             examTitle: exam.title,
             className: selectedClass?.name || 'Class',
+<<<<<<< HEAD
             classId: selectedClass?._id,
             examType: 'live-class', // ✅ CRITICAL: Set exam type
             waitingRoomRequired: true // ✅ NEW: Flag for waiting room
@@ -970,6 +1134,34 @@ const handleQuizAction = (exam) => {
           examType: 'asynchronous', // ✅ CRITICAL: Set exam type
           waitingRoomRequired: false
         }// ✅ NEW: Also need waiting roo
+=======
+            classId: selectedClass?._id
+          }
+        });
+      } else {
+        checkLiveSessionStatusForExam(exam._id).then(isActive => {
+          if (isActive) {
+            alert('Live class has started! Redirecting you now...');
+            navigate(`/student-quiz/${exam._id}`);
+          } else {
+            alert('Live class has not started yet. Please wait for the teacher to begin.');
+          }
+        });
+      }
+    } else if (actionButton.action === 'start-quiz') {
+      // ✅ ASYNC QUIZ - Start the quiz
+      console.log('📝 Student starting async quiz:', exam._id);
+      navigate(`/student-quiz/${exam._id}`, {
+        state: {
+          requiresCamera: exam.isActive, // Only requires camera if active session
+          requiresMicrophone: false,
+          examTitle: exam.title,
+          className: selectedClass?.name || 'Class',
+          classId: selectedClass?._id,
+          isExamSession: exam.isActive,
+          timeLimit: exam.timeLimit || 60
+        }
+>>>>>>> backupRepo/main
       });
     }
   }
@@ -988,8 +1180,12 @@ const handleQuizAction = (exam) => {
           classId: selectedClass?._id,
           className: selectedClass?.name,
           requiresCamera: isActiveSession,
+<<<<<<< HEAD
           isExamSession: isActiveSession,
           examType: exam.examType || 'asynchronous' // ✅ ADD TH
+=======
+          isExamSession: isActiveSession
+>>>>>>> backupRepo/main
         }
       });
       
@@ -1003,7 +1199,11 @@ const handleQuizAction = (exam) => {
 
   const handleStartExamSession = async (exam) => {
     try {
+<<<<<<< HEAD
       console.log("🚀 Starting exam session for:", exam._id);
+=======
+      console.log(" Starting exam session for:", exam._id);
+>>>>>>> backupRepo/main
       
       const response = await api.post(`/exams/${exam._id}/start-session`);
       
@@ -1444,7 +1644,11 @@ const handleQuizAction = (exam) => {
       if (selectedClassId && classes.length > 0) {
         const targetClass = classes.find(c => c._id === selectedClassId);
         if (targetClass) {
+<<<<<<< HEAD
           console.log("🎯 Selecting class from redirect:", targetClass.name);
+=======
+          console.log(" Selecting class from redirect:", targetClass.name);
+>>>>>>> backupRepo/main
           setSelectedClass(targetClass);
           
           if (activeTab) {
@@ -1454,7 +1658,11 @@ const handleQuizAction = (exam) => {
           
           if (showClasswork) {
             setActiveTab('classwork');
+<<<<<<< HEAD
             console.log("🎯 Forcing classwork tab");
+=======
+            console.log(" Forcing classwork tab");
+>>>>>>> backupRepo/main
           }
           
           if (refreshClasswork && activeTab === 'classwork') {
@@ -2068,7 +2276,11 @@ useEffect(() => {
     }
   };
 
+<<<<<<< HEAD
   // ===== CLASS CREATION AND JOINING =====
+=======
+  // ===== CLASS CREATION =====
+>>>>>>> backupRepo/main
   const createClass = async (e) => {
     e.preventDefault();
     try {
@@ -2083,6 +2295,7 @@ useEffect(() => {
     }
   };
 
+<<<<<<< HEAD
   const joinClass = async (e) => {
     e.preventDefault();
     try {
@@ -2099,6 +2312,10 @@ useEffect(() => {
 
   const handleSelectClass = async (classData) => {
     console.log("🎯 Selecting class:", classData.name);
+=======
+  const handleSelectClass = async (classData) => {
+    console.log(" Selecting class:", classData.name);
+>>>>>>> backupRepo/main
     setSelectedClass(classData);
     setActiveTab("classwork");
     
@@ -2403,6 +2620,7 @@ useEffect(() => {
     );
   };
 
+<<<<<<< HEAD
   // ===== GRADES TAB RENDERER =====
   const renderGradesTab = () => {
     
@@ -2603,10 +2821,117 @@ useEffect(() => {
             <div className="gradebook-overall">
               Class average:&nbsp;
               <strong>{gradesData.overall.average.toFixed(1)}%</strong>
+=======
+// ===== GRADES TAB RENDERER =====
+const renderGradesTab = () => {
+  if (!selectedClass) return null;
+
+  // ---- STUDENT VIEW: personal gradebook ----
+  if (selectedClass.userRole === "student") {
+    // ... (keep existing student view code)
+  }
+
+  // ---- TEACHER VIEW ----
+  if (gradesLoading) {
+    return (
+      <div className="grades-tab">
+        <div className="loading">Loading grades.</div>
+      </div>
+    );
+  }
+
+  // LEVEL 2 / 3 detail views
+  if (gradesView === "exam" && selectedExamId) {
+    return renderExamDetails();
+  }
+
+  if (gradesView === "student" && selectedStudentId) {
+    return renderStudentDetails();
+  }
+
+  const { exams, students, examStats } = gradesData;
+
+  if (!exams || exams.length === 0 || !students || students.length === 0) {
+    return (
+      <div className="grades-tab">
+        <div className="grades-empty">
+          <h3>Grades</h3>
+          <p>
+            No grades yet. When students start submitting quizzes/exams, this
+            gradebook will show their scores.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Prepare student data with exam scores
+  const studentRows = students.map(student => {
+    const examScores = {};
+    exams.forEach(exam => {
+      const submissions = exam.completedBy || [];
+      const submission = submissions.find(s => {
+        const id = (s.studentId && s.studentId._id) || s.studentId;
+        return id && id.toString() === student._id;
+      });
+      examScores[exam._id] = submission ? submission.score : null;
+    });
+    
+    return {
+      ...student,
+      examScores
+    };
+  });
+
+  return (
+    <div className="grades-tab">
+      <div className="grades-header">
+        <h3>Grades</h3>
+        <p>
+          Gradebook for this class. Click a quiz title or student name for
+          more details.
+        </p>
+      </div>
+
+      {/* Toolbar like Google Classroom */}
+      <div className="gradebook-toolbar">
+        <div className="gradebook-sort">
+          <button
+            type="button"
+            className="sort-by-btn"
+            onClick={() => setShowSortMenu((open) => !open)}
+          >
+            Sort by {gradeSortBy === "lastName" ? "last name" : "first name"} ▾
+          </button>
+
+          {showSortMenu && (
+            <div className="sort-menu">
+              <button
+                type="button"
+                className="sort-menu-item"
+                onClick={() => {
+                  setGradeSortBy("lastName");
+                  setShowSortMenu(false);
+                }}
+              >
+                Sort by last name
+              </button>
+              <button
+                type="button"
+                className="sort-menu-item"
+                onClick={() => {
+                  setGradeSortBy("firstName");
+                  setShowSortMenu(false);
+                }}
+              >
+                Sort by first name
+              </button>
+>>>>>>> backupRepo/main
             </div>
           )}
         </div>
 
+<<<<<<< HEAD
         <div className="gradebook-table-container">
           <table className="gradebook-table">
             <thead>
@@ -2668,10 +2993,85 @@ useEffect(() => {
                       {stat && stat.average != null
                         ? `${stat.average.toFixed(1)}%`
                         : "—"}
+=======
+        {/* Export Button */}
+        <button
+          className="export-grades-btn"
+          onClick={exportGradesToExcel}
+          title="Export grades to Excel"
+        >
+          <svg className="export-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Export to Excel
+        </button>
+
+        {gradesData.overall && (
+          <div className="gradebook-overall">
+            Class average:&nbsp;
+            <strong>{gradesData.overall.average.toFixed(1)}%</strong>
+          </div>
+        )}
+      </div>
+
+      {/* FIXED: PROPER TABLE STRUCTURE - Using Table Instead of Grid for Better Alignment */}
+      <div className="grades-table-container">
+        <table className="grades-table-fixed">
+          <thead>
+            <tr>
+              <th className="grades-th students-th">Students</th>
+              {exams.map((exam) => (
+                <th key={exam._id} className="grades-th exam-th">
+                  {exam.title}
+                  <div className="exam-points">out of {exam.totalPoints}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* Class Average Row - This should be FIRST */}
+            <tr className="class-average-row">
+              <td className="grades-td average-label">Class average</td>
+              {examStats.map((exam) => (
+                <td key={exam.examId} className="grades-td average-value">
+                  {exam.average ? `${exam.average.toFixed(1)}%` : '—'}
+                </td>
+              ))}
+            </tr>
+            
+            {/* Student Rows */}
+            {studentRows.map((student) => (
+              <tr key={student._id} className="student-row">
+                <td className="grades-td student-info-cell">
+                  <div className="student-info-wrapper">
+                    <img 
+                      src={student.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || student.email)}&background=4285f4&color=fff`}
+                      className="student-avatar"
+                      alt={student.name || student.email}
+                    />
+                    <div className="student-name-email">
+                      <div className="student-name">{student.name || student.email}</div>
+                      <div className="student-email">{student.email}</div>
+                    </div>
+                  </div>
+                </td>
+                {exams.map((exam) => {
+                  const score = student.examScores[exam._id];
+                  return (
+                    <td key={exam._id} className="grades-td score-cell">
+                      {score == null ? (
+                        <span className="grade-missing">Missing</span>
+                      ) : (
+                        <span className="grade-score">
+                          {score}/{exam.totalPoints}
+                        </span>
+                      )}
+>>>>>>> backupRepo/main
                     </td>
                   );
                 })}
               </tr>
+<<<<<<< HEAD
 
               {/* One row per student */}
               {sortedStudents.map((student) => (
@@ -2756,6 +3156,17 @@ useEffect(() => {
       </div>
     );
   };
+=======
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+       
+>>>>>>> backupRepo/main
 
   // ===== TO DO TAB RENDERER =====
   const renderToDoTab = () => {
@@ -2953,10 +3364,14 @@ useEffect(() => {
     return (
       <div className="todo-tab">
         <div className="todo-header-section">
+<<<<<<< HEAD
           <h2 className="todo-title">To do</h2>
           <p className="todo-subtitle">
             All your assignments and exams in one place
           </p>
+=======
+          
+>>>>>>> backupRepo/main
         </div>
 
         {/* Tabs */}
@@ -3234,7 +3649,11 @@ useEffect(() => {
     const isAnnouncementCreator = announcement.createdBy?._id === currentUserId;
     const canEditDelete = isAnnouncementCreator || isTeacher;
     
+<<<<<<< HEAD
     console.log("🎯 ANNOUNCEMENT CARD RENDERED:", {
+=======
+    console.log(" ANNOUNCEMENT CARD RENDERED:", {
+>>>>>>> backupRepo/main
       announcementId: announcement._id,
       currentUserId,
       isAnnouncementCreator,
@@ -3289,7 +3708,11 @@ useEffect(() => {
         content: localEditContent.trim()
       };
       
+<<<<<<< HEAD
       console.log("🚀 Calling updateAnnouncement API...");
+=======
+      console.log(" Calling updateAnnouncement API...");
+>>>>>>> backupRepo/main
       const response = await updateAnnouncement(announcement._id, updateData);
       console.log("✅ EDIT API RESPONSE RECEIVED:", response);
 
@@ -4055,6 +4478,136 @@ useEffect(() => {
     );
   };
 
+<<<<<<< HEAD
+=======
+  // ✅ ADDED: JOIN CLASS MODAL COMPONENT
+  const JoinModal = () => {
+    if (!showJoinModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <FaUserPlus className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Join Class</h3>
+              <p className="text-sm text-gray-600">Enter a class code to join</p>
+            </div>
+          </div>
+          
+          <form onSubmit={joinClass}>
+            <div className="mb-4">
+              <label htmlFor="joinCode" className="block text-sm font-medium text-gray-700 mb-2">
+                Class Code
+              </label>
+              <input
+                type="text"
+                id="joinCode"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="Enter 6-digit class code"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+                maxLength={6}
+                pattern="[A-Z0-9]{6}"
+                title="Enter a 6-digit class code (letters and numbers only)"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Enter the code provided by your teacher. Format: 6 letters/numbers.
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowJoinModal(false);
+                  setJoinCode("");
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              >
+                Join Class
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+  // ✅ ADDED: CREATE CLASS MODAL COMPONENT
+  const CreateClassModal = () => {
+    if (!showCreateModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <FaBook className="w-5 h-5 text-green-600" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Create Class</h3>
+              <p className="text-sm text-gray-600">Create a new class for your students</p>
+            </div>
+          </div>
+          
+          <form onSubmit={createClass}>
+            <div className="mb-4">
+              <label htmlFor="className" className="block text-sm font-medium text-gray-700 mb-2">
+                Class Name
+              </label>
+              <input
+                type="text"
+                id="className"
+                value={className}
+                onChange={(e) => setClassName(e.target.value)}
+                placeholder="Enter class name (e.g., Math 101)"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                This will be the name students see when joining your class.
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setClassName("");
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              >
+                Create Class
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+>>>>>>> backupRepo/main
   // UNENROLL CONFIRMATION MODAL
   const UnenrollModal = () => {
     if (!showUnenrollModal || !classToUnenroll) return null;
@@ -4527,6 +5080,13 @@ useEffect(() => {
       const examTypeDisplay = getExamTypeDisplay(exam);
       const actionButton = getExamActionButton(exam, selectedClass?.userRole, user._id);
       
+<<<<<<< HEAD
+=======
+      // ✅ ADD THIS: Check if teacher can view summary (exam is completed/has submissions)
+      const canViewSummary = selectedClass?.userRole === "teacher" && 
+        (exam.completedBy?.length > 0 || exam.isActive === false);
+      
+>>>>>>> backupRepo/main
       return (
         <div key={exam._id} className="exam-card">
           <div className="exam-card-header">
@@ -4535,6 +5095,10 @@ useEffect(() => {
                 {examTypeDisplay.icon} {examTypeDisplay.label}
               </span>
             </div>
+<<<<<<< HEAD
+=======
+            
+>>>>>>> backupRepo/main
             <div className="exam-title-section">
               <h3 className="exam-title">{exam.title}</h3>
               {exam.description && (
@@ -4545,18 +5109,54 @@ useEffect(() => {
               </div>
             </div>
             
+<<<<<<< HEAD
             {/* TEACHER ACTIONS */}
+=======
+            {/* ✅ ADD THIS: VIOLATION SUMMARY BUTTON FOR TEACHERS */}
+>>>>>>> backupRepo/main
             {selectedClass?.userRole === "teacher" && (
               <div className="exam-actions-dropdown">
                 <button 
                   className="exam-menu-btn"
                   onClick={(e) => toggleQuizMenu(exam._id, e)}
+<<<<<<< HEAD
+=======
+                  style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    zIndex: 10,
+                    background: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    cursor: 'pointer'
+                  }}
+>>>>>>> backupRepo/main
                 >
                   <FaEllipsisV />
                 </button>
                 
                 {showQuizMenu === exam._id && (
+<<<<<<< HEAD
                   <div className="exam-menu-dropdown">
+=======
+                  <div 
+                    className="exam-menu-dropdown"
+                    style={{
+                      position: 'absolute',
+                      top: '35px',
+                      right: '10px',
+                      zIndex: 20,
+                      background: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      minWidth: '180px'
+                    }}
+                  >
+                    {/* Edit Button */}
+>>>>>>> backupRepo/main
                     <button 
                       className="exam-menu-item"
                       onClick={(e) => {
@@ -4567,6 +5167,27 @@ useEffect(() => {
                       <FaEdit className="menu-item-icon" />
                       Edit
                     </button>
+<<<<<<< HEAD
+=======
+                    
+                    {/* VIOLATION SUMMARY BUTTON */}
+                    {canViewSummary && (
+                      <button 
+                        className="exam-menu-item"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewViolationSummary(exam);
+                          setShowQuizMenu(null);
+                        }}
+                      >
+                        <svg className="menu-item-icon" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        View Detection Summary
+                      </button>
+                    )}
+                    
+>>>>>>> backupRepo/main
                     {exam.examType === 'live-class' ? (
                       <>
                         {exam.isActive ? (
@@ -4624,6 +5245,11 @@ useEffect(() => {
                         )}
                       </>
                     )}
+<<<<<<< HEAD
+=======
+                    
+                    {/* Delete Button */}
+>>>>>>> backupRepo/main
                     <button 
                       className="exam-menu-item delete"
                       onClick={(e) => handleDeleteQuizClick(exam, e)}
@@ -4642,7 +5268,11 @@ useEffect(() => {
               <span className="exam-type">{exam.examType === 'live-class' ? 'Live Class' : 'Async Quiz'}</span>
               {exam.examType === 'asynchronous' && (
                 <span className="exam-duration">
+<<<<<<< HEAD
                   ⏱️ {exam.timeLimit || 60} minutes
+=======
+                   {exam.timeLimit || 60} minutes
+>>>>>>> backupRepo/main
                 </span>
               )}
               {exam.scheduledDate && (
@@ -4684,8 +5314,12 @@ useEffect(() => {
     </button>
   ) : (
     // Teacher async quiz - no button or show "View" button
+<<<<<<< HEAD
     <div className="no-action-message">
       <span className="info-text">👀 View Only</span>
+=======
+    <div>
+>>>>>>> backupRepo/main
     </div>
   )}
 
@@ -4748,8 +5382,12 @@ useEffect(() => {
                 )}
               </div>
             ) : (
+<<<<<<< HEAD
               <div className="student-indicator">
                 👨‍🎓 You are viewing this class as a <strong>student</strong>.
+=======
+              <div >
+>>>>>>> backupRepo/main
               </div>
             )}
           </div>
@@ -4857,7 +5495,11 @@ useEffect(() => {
                   className={`classroom-tab ${activeTab === "classwork" ? "active" : ""}`}
                   onClick={() => setActiveTab("classwork")}
                 >
+<<<<<<< HEAD
                   Classwork
+=======
+                  Stream
+>>>>>>> backupRepo/main
                 </button>
                 {/* ✅ ADD TO DO TAB FOR STUDENTS */}
                 <button 
@@ -5074,6 +5716,7 @@ useEffect(() => {
         </div>
 
         <div className="header-right">
+<<<<<<< HEAD
           {/* CREATE/JOIN DROPDOWN */}
           <div className="plus-btn-container" ref={createJoinDropdownRef}>
             <button 
@@ -5112,6 +5755,62 @@ useEffect(() => {
               </div>
             )}
           </div>
+=======
+          {/* ✅ FIXED: CREATE/JOIN DROPDOWN - ONLY SHOW ON HOMEPAGE */}
+          {!selectedClass && (
+            <div className="plus-btn-container" ref={createJoinDropdownRef}>
+              <button 
+                className="plus-btn"
+                onClick={() => setShowCreateJoinDropdown(!showCreateJoinDropdown)}
+              >
+                <FaPlus className="plus-icon" />
+              </button>
+              {showCreateJoinDropdown && (
+                <div className="create-join-dropdown">
+                  {userRole === "teacher" && (
+                    <button 
+                      className="create-join-item"
+                      onClick={() => {
+                        setShowCreateModal(true);
+                        setShowCreateJoinDropdown(false);
+                      }}
+                    >
+                      <FaBook className="create-join-icon" />
+                      Create Class
+                    </button>
+                  )}
+                  
+                  {userRole === "student" && (
+                    <button 
+                      className="create-join-item"
+                      onClick={() => {
+                        setShowJoinModal(true);
+                        setShowCreateJoinDropdown(false);
+                      }}
+                    >
+                      <FaUserPlus className="create-join-icon" />
+                      Join Class
+                    </button>
+                  )}
+                  
+                  {/* ✅ ADD QUIZ CREATION OPTION FOR TEACHERS */}
+                  {userRole === "teacher" && selectedClass && (
+                    <button 
+                      className="create-join-item"
+                      onClick={() => {
+                        navigate(`/class/${selectedClass._id}/quiz/new`);
+                        setShowCreateJoinDropdown(false);
+                      }}
+                    >
+                      <FaPlus className="create-join-icon" />
+                      Create Quiz
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+>>>>>>> backupRepo/main
 
           {/* USER PROFILE DROPDOWN */}
           <div className="user-profile" ref={userDropdownRef}>
@@ -5235,6 +5934,7 @@ useEffect(() => {
                     
                     {teachingDropdownOpen && (
                       <div className="teaching-dropdown">
+<<<<<<< HEAD
                         <button 
                           className="review-button"
                           onClick={() => navigate('/review')}
@@ -5243,6 +5943,9 @@ useEffect(() => {
                           <span className="review-text">To review</span>
                           <span className="review-badge">{itemsToReview}</span>
                         </button>
+=======
+                        {/* ✅ REMOVED: "To review" button */}
+>>>>>>> backupRepo/main
                         
                         <div className="teaching-classes-list">
                           {teachingClasses.map((classData) => (
@@ -5295,6 +5998,10 @@ useEffect(() => {
                 {enrolledDropdownOpen && (
                   <div className="enrolled-dropdown">
                     
+<<<<<<< HEAD
+=======
+                    {/* ✅ REMOVED: "To review" button for students */}
+>>>>>>> backupRepo/main
                     
                     <div className="enrolled-classes-list">
                       {enrolledClasses.slice(0, 8).map((classData) => (
@@ -5359,6 +6066,7 @@ useEffect(() => {
         </div>
       </main>
 
+<<<<<<< HEAD
       {/* MODALS SECTION */}
       {showCreateModal && (
         <div className="modal">
@@ -5383,29 +6091,31 @@ useEffect(() => {
           </div>
         </div>
       )}
+=======
+      {/* ✅ ADDED: MODAL COMPONENTS */}
+      <CreateClassModal />
+      <JoinModal />
+      {AnnouncementModal()}
+      <DeployExamModal />
+      <UnenrollModal />
+      <ArchiveModal />
+      <RestoreModal />
+      <SettingsModal />
+      <DeleteConfirmationModal />
+>>>>>>> backupRepo/main
 
-      {showJoinModal && (
-        <div className="modal">
-          <div className="modal-content">
-            <h3>Join Class</h3>
-            <form onSubmit={joinClass}>
-              <input
-                type="text"
-                placeholder="Enter Class Code"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                required
-              />
-              <div className="modal-actions">
-                <button type="submit" className="primary-btn">
-                  <FaUserPlus className="btn-icon" />
-                  Join
-                </button>
-                <button type="button" onClick={() => setShowJoinModal(false)}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* ✅ ADDED: Violation Summary Modal */}
+      {showViolationSummary && selectedExamForSummary && (
+        <ViolationSummaryModal
+          isOpen={showViolationSummary}
+          onClose={() => {
+            setShowViolationSummary(false);
+            setSelectedExamForSummary(null);
+          }}
+          examId={selectedExamForSummary._id}
+          examTitle={selectedExamForSummary.title}
+          examType={selectedExamForSummary.examType || 'asynchronous'}
+        />
       )}
 
       {AnnouncementModal()}

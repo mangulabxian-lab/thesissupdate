@@ -2181,6 +2181,7 @@
 .timer-info p {
   margin: 5px 0;
 }
+<<<<<<< HEAD
 
 /* Video Footer Alerts Styles */
 .video-footer-alerts {
@@ -2693,4 +2694,43 @@
   margin-top: 5px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 5px;
+=======
+/* Make sure End Session button is visible */
+.end-exam-btn {
+  background-color: #dc2626 !important;
+  color: white !important;
+  font-weight: bold !important;
+  padding: 10px 20px !important;
+  border-radius: 8px !important;
+  border: none !important;
+  cursor: pointer !important;
+  font-size: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: background-color 0.2s !important;
+}
+
+.end-exam-btn:hover {
+  background-color: #b91c1c !important;
+}
+
+.start-exam-btn {
+  background-color: #10b981 !important;
+  color: white !important;
+  font-weight: bold !important;
+  padding: 10px 20px !important;
+  border-radius: 8px !important;
+  border: none !important;
+  cursor: pointer !important;
+  font-size: 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: background-color 0.2s !important;
+}
+
+.start-exam-btn:hover {
+  background-color: #059669 !important;
+>>>>>>> backupRepo/main
 }

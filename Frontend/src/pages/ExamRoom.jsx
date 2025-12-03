@@ -212,7 +212,7 @@ export default function ExamRoom({ roomId }) {
     }
     isInitializedRef.current = true;
 
-    console.log("🚀 Initializing Exam Room...");
+    console.log(" Initializing Exam Room...");
     socketRef.current = io("http://localhost:3000");
 
     const initMediaStream = async () => {
@@ -548,7 +548,7 @@ export default function ExamRoom({ roomId }) {
               color: "#5f6368",
               fontSize: "16px"
             }}>
-              ⏱️ {formatTime(examDuration - timer)}
+               {formatTime(examDuration - timer)}
             </div>
           </div>
           <div style={{ fontWeight: "bold", color: "#5f6368" }}>

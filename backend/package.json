@@ -16,6 +16,10 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+<<<<<<< HEAD
+=======
+    "exceljs": "^4.4.0",
+>>>>>>> backupRepo/main
     "express": "^5.1.0",
     "fa": "^1.0.1",
     "http": "^0.0.1-security",
@@ -27,6 +31,10 @@
     "passport-google-oauth20": "^2.0.0",
     "path": "^0.12.7",
     "pdf-parse": "^1.1.4",
+<<<<<<< HEAD
+=======
+    "pdfkit": "^0.17.2",
+>>>>>>> backupRepo/main
     "qrcode": "^1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

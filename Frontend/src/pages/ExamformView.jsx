@@ -14,7 +14,11 @@ export default function ExamFormView() {
     const fetchForm = async () => {
       try {
         const token = localStorage.getItem('token');
+<<<<<<< HEAD
         console.log('🎯 Fetching quiz for student, exam ID:', examId);
+=======
+        console.log(' Fetching quiz for student, exam ID:', examId);
+>>>>>>> backupRepo/main
         
         // First, check if student can access this quiz
         const accessCheck = await api.get(`/exams/take/${examId}`);

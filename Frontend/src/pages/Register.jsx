@@ -2,7 +2,10 @@
 import { useState, useRef, useEffect } from "react";
 import api from "../lib/api";
 import { useNavigate } from "react-router-dom";
+<<<<<<< HEAD
 import RoleSelectionModal from "./RoleSelectionModal";
+=======
+>>>>>>> backupRepo/main
 
 // Correct imports
 import bgImage from "../assets/ccs-bg.jpg";

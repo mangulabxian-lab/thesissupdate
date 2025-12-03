@@ -4,6 +4,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { createQuiz, updateQuiz, getQuizForEdit, deployExam, uploadFileAndParse } from '../lib/api';
 import './QuizFormPage.css';
 
+<<<<<<< HEAD
 // ✅ ADD COMMENT API FUNCTIONS
 const getQuizComments = async (classId, examId) => {
   const token = localStorage.getItem('token');
@@ -184,6 +185,8 @@ const TeacherQuizComments = ({ classId, quizId, user }) => {
   );
 };
 
+=======
+>>>>>>> backupRepo/main
 const QuizFormPage = () => {
   const { classId, examId } = useParams();
   const navigate = useNavigate();
@@ -331,6 +334,54 @@ useEffect(() => {
       return `${secs}s`;
     }
   };
+<<<<<<< HEAD
+=======
+
+  // ✅ ADD THE MISSING handleScheduleAssignment FUNCTION
+  const handleScheduleAssignment = async () => {
+    if (!scheduledDate || !scheduledTime) {
+      alert('Please select both date and time');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Combine date and time
+      const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}:00`);
+      
+      // Save quiz with schedule data
+      const { savedExamId } = await saveQuizToBackend({
+        status: 'scheduled',
+        isDeployed: false,
+        scheduledAt: scheduledDateTime
+      });
+      
+      alert(`✅ Quiz scheduled for ${scheduledDateTime.toLocaleString()}`);
+      
+      setShowScheduleModal(false);
+      setScheduledDate("");
+      setScheduledTime("23:59");
+      
+      navigate('/dashboard', {
+        state: { 
+          selectedClassId: classId,
+          activeTab: 'classwork',
+          refresh: true,
+          showSuccess: true
+        },
+        replace: true
+      });
+      
+    } catch (error) {
+      console.error('Failed to schedule quiz:', error);
+      alert('Failed to schedule quiz: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+>>>>>>> backupRepo/main
 // ✅ FIXED: UPDATED saveQuizToBackend function with duplicate prevention
 const saveQuizToBackend = async (extraFields = {}) => {
   // ✅ ADD: Prevent duplicate calls
@@ -350,9 +401,16 @@ const saveQuizToBackend = async (extraFields = {}) => {
 
   const questionsForBackend = quiz.questions.map(({ id, ...question }) => question);
   
+<<<<<<< HEAD
   const timeLimitSeconds = examType === 'asynchronous' 
     ? (examTimer.hours * 3600) + (examTimer.minutes * 60) + examTimer.seconds
     : 0;
+=======
+  // Calculate total seconds for timer
+  const timeLimitSeconds = examType === 'asynchronous' 
+  ? (examTimer.hours * 3600) + (examTimer.minutes * 60) + examTimer.seconds
+  : 0;
+>>>>>>> backupRepo/main
 
   let response;
   let savedExamId;
@@ -593,7 +651,11 @@ const saveQuizToBackend = async (extraFields = {}) => {
       const deployResponse = await deployExam(savedExamId);
       
       if (deployResponse.success) {
+<<<<<<< HEAD
         console.log("🚀 Quiz deployed successfully! Navigating to dashboard...");
+=======
+        console.log(" Quiz deployed successfully! Navigating to dashboard...");
+>>>>>>> backupRepo/main
         
         navigate('/dashboard', {
           state: { 
@@ -655,7 +717,11 @@ const saveQuizToBackend = async (extraFields = {}) => {
             {showOptionsMenu && (
               <div className="options-dropdown">
                 <button onClick={() => handleOptionSelect('asynchronous')}>
+<<<<<<< HEAD
                   ⏱️ Asynchronous
+=======
+                   Asynchronous
+>>>>>>> backupRepo/main
                 </button>
                 <button onClick={() => handleOptionSelect('live-class')}>
                   🎥 Live Class
@@ -736,7 +802,11 @@ const saveQuizToBackend = async (extraFields = {}) => {
   
   <div className="exam-type-display">
     Exam Type: <strong>
+<<<<<<< HEAD
       {examType === 'asynchronous' ? '⏱️ Asynchronous' : '🎥 Live Class'}
+=======
+      {examType === 'asynchronous' ? ' Asynchronous' : '🎥 Live Class'}
+>>>>>>> backupRepo/main
     </strong>
   </div>
   
@@ -785,6 +855,7 @@ const saveQuizToBackend = async (extraFields = {}) => {
           </div>
         </div>
 
+<<<<<<< HEAD
         {/* ✅ ADDED TEACHER QUIZ COMMENTS SECTION */}
         {(examId || quiz._id) && (
           <div className="teacher-comments-section">
@@ -795,6 +866,9 @@ const saveQuizToBackend = async (extraFields = {}) => {
             />
           </div>
         )}
+=======
+        {/* ✅ REMOVED TEACHER QUIZ COMMENTS SECTION - Comments not needed */}
+>>>>>>> backupRepo/main
 
         <div className="questions-list">
           {quiz.questions.map((question, index) => (
@@ -829,7 +903,11 @@ const saveQuizToBackend = async (extraFields = {}) => {
             onClick={handleDeployQuiz}
             disabled={loading || quiz.questions.length === 0}
           >
+<<<<<<< HEAD
             {loading ? 'Deploying...' : '🚀 Deploy Quiz'}
+=======
+            {loading ? 'Deploying...' : ' Deploy Quiz'}
+>>>>>>> backupRepo/main
           </button>
           <button 
             className="cancel-btn"
@@ -906,7 +984,11 @@ const saveQuizToBackend = async (extraFields = {}) => {
   <div className="modal-overlay" onClick={() => setShowTimerModal(false)}>
     <div className="timer-modal" onClick={(e) => e.stopPropagation()}>
       <div className="modal-header">
+<<<<<<< HEAD
         <h2>⏱️ Set Exam Timer</h2>
+=======
+        <h2> Set Exam Timer</h2>
+>>>>>>> backupRepo/main
         <button 
           className="close-modal"
           onClick={() => setShowTimerModal(false)}
@@ -917,7 +999,11 @@ const saveQuizToBackend = async (extraFields = {}) => {
       
       <div className="modal-content">
         <div className="exam-type-info">
+<<<<<<< HEAD
           <p><strong>Exam Type:</strong> {examType === 'asynchronous' ? '⏱️ Asynchronous' : '🎥 Live Class'}</p>
+=======
+          <p><strong>Exam Type:</strong> {examType === 'asynchronous' ? ' Asynchronous' : '🎥 Live Class'}</p>
+>>>>>>> backupRepo/main
           {examType === 'live-class' && (
             <div className="live-class-note">
               <small>💡 Live Class: No timer needed. Students join in real-time session.</small>

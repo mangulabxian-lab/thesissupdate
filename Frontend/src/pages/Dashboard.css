@@ -268,7 +268,11 @@
     text-decoration: none;
     box-sizing: border-box;
     position: relative;
+<<<<<<< HEAD
     min-height: 100%;
+=======
+    min-height: 100%; 
+>>>>>>> backupRepo/main
 }
 
 .sidebar-item:hover {
@@ -3562,11 +3566,15 @@ a:focus {
   margin-bottom: 8px;
 }
 
+<<<<<<< HEAD
 .todo-subtitle {
   font-size: 14px;
   color: #5f6368;
   margin: 0;
 }
+=======
+
+>>>>>>> backupRepo/main
 
 .todo-section {
   margin-bottom: 32px;
@@ -4875,20 +4883,27 @@ a:focus {
 }
 
 
+<<<<<<< HEAD
 .teacher-indicator,
 .student-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+=======
+>>>>>>> backupRepo/main
 
 .teacher-indicator {
   color: #34a853;
 }
 
+<<<<<<< HEAD
 .student-indicator {
   color: #4285f4;
 }
+=======
+
+>>>>>>> backupRepo/main
 /* Delete All Quizzes Styles */
 .delete-all-quizzes-btn {
   background: #dc3545;
@@ -4946,11 +4961,15 @@ a:focus {
   flex-wrap: wrap;
 }
 
+<<<<<<< HEAD
 .student-indicator {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+=======
+
+>>>>>>> backupRepo/main
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
@@ -6472,11 +6491,14 @@ a:focus {
   font-size: 14px;
 }
 
+<<<<<<< HEAD
 /* Role Indicator */
 .role-indicator {
   padding: 12px 0;
   border-top: 1px solid #e8eaed;
 }
+=======
+>>>>>>> backupRepo/main
 
 .teacher-indicator, .student-indicator {
   display: flex;
@@ -6490,9 +6512,12 @@ a:focus {
   color: #1a73e8;
 }
 
+<<<<<<< HEAD
 .student-indicator {
   color: #34a853;
 }
+=======
+>>>>>>> backupRepo/main
 
 .delete-all-quizzes-btn {
   margin-left: auto;
@@ -6653,6 +6678,7 @@ a:focus {
   margin-left: 8px;
 }
 
+<<<<<<< HEAD
 .no-action-message {
   display: flex;
   align-items: center;
@@ -6662,6 +6688,9 @@ a:focus {
   border-radius: 6px;
   border: 1px solid #e9ecef;
 }
+=======
+
+>>>>>>> backupRepo/main
 
 .info-text {
   font-size: 0.9rem;
@@ -6699,4 +6728,616 @@ a:focus {
   font-size: 0.7rem;
   font-weight: bold;
   margin-left: 8px;
+<<<<<<< HEAD
+=======
+}
+/* Export Buttons */
+.grades-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.export-buttons-container {
+  position: relative;
+}
+
+.export-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.export-btn:hover {
+  background: #0d62d9;
+}
+
+.export-dropdown {
+  position: relative;
+}
+
+.export-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  min-width: 180px;
+  z-index: 100;
+  display: none;
+  margin-top: 5px;
+}
+
+.export-dropdown:hover .export-dropdown-menu {
+  display: block;
+}
+
+.export-option {
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #3c4043;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.export-option:hover {
+  background: #f8f9fa;
+}
+/* Export Button Styles */
+.export-grades-btn {
+  background-color: #34a853;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.export-grades-btn:hover {
+  background-color: #2d9249;
+  transform: translateY(-1px);
+}
+
+.export-grades-btn:active {
+  transform: translateY(0);
+}
+
+.export-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Gradebook Toolbar Update */
+.gradebook-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.gradebook-sort {
+  position: relative;
+}
+
+.sort-by-btn {
+  background: white;
+  border: 1px solid #dadce0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #5f6368;
+}
+
+.sort-by-btn:hover {
+  background: #f8f9fa;
+}
+
+.sort-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  z-index: 1000;
+  min-width: 180px;
+  margin-top: 4px;
+}
+
+.sort-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #5f6368;
+  cursor: pointer;
+}
+
+.sort-menu-item:hover {
+  background: #f8f9fa;
+}
+
+.gradebook-overall {
+  font-size: 14px;
+  color: #5f6368;
+  background: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+/* ===========================
+   GOOGLE CLASSROOM – GRADES UI
+   =========================== */
+
+/* Grades Container */
+.grades-container {
+  width: 100%;
+  padding: 20px;
+  overflow-x: auto;
+}
+
+/* Grades Table Fix */
+.grades-table-container {
+  overflow-x: auto;
+  margin-top: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+}
+
+.grades-table-fixed {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+.grades-th {
+  padding: 12px;
+  background: #f8f9fa;
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+  font-weight: 600;
+  text-align: center;
+  vertical-align: middle;
+  min-width: 150px;
+}
+
+.students-th {
+  text-align: left;
+  padding-left: 20px;
+  min-width: 200px;
+  position: sticky;
+  left: 0;
+  background: #f8f9fa;
+  z-index: 10;
+}
+
+.exam-th {
+  text-align: center;
+}
+
+.exam-points {
+  font-size: 12px;
+  font-weight: normal;
+  color: #5f6368;
+  margin-top: 4px;
+}
+
+.grades-td {
+  padding: 12px;
+  border-right: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+  vertical-align: middle;
+  height: 60px;
+}
+
+.average-label {
+  background: #f8f9fa;
+  font-weight: 600;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+.average-value {
+  text-align: center;
+  font-weight: 500;
+  color: #5f6368;
+  background: #f8f9fa;
+}
+
+.student-info-cell {
+  background: #f8f9fa;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  min-width: 200px;
+}
+
+.student-info-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.student-avatar {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.student-name-email {
+  min-width: 0;
+}
+
+.student-name {
+  font-weight: 500;
+  color: #3c4043;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-email {
+  font-size: 12px;
+  color: #5f6368;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.score-cell {
+  text-align: center;
+  background: white;
+}
+
+.student-row:nth-child(even) .score-cell {
+  background: #fafafa;
+}
+
+.student-row:hover .grades-td {
+  background: #f1f3f4 !important;
+}
+
+.student-row:hover .student-info-cell {
+  background: #f1f3f4 !important;
+}
+
+.student-row:hover .average-label {
+  background: #f1f3f4 !important;
+}
+
+.class-average-row {
+  background: #f8f9fa;
+}
+
+.class-average-row:hover .grades-td {
+  background: #f1f3f4 !important;
+}
+
+.grade-missing {
+  color: #d93025;
+  font-style: italic;
+  font-size: 14px;
+}
+
+.grade-score {
+  font-weight: 500;
+  color: #1a73e8;
+  font-size: 14px;
+}
+
+/* Gradebook Toolbar - keep existing */
+.gradebook-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.gradebook-sort {
+  position: relative;
+}
+
+.sort-by-btn {
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #5f6368;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-by-btn:hover {
+  background: #f8f9fa;
+}
+
+.sort-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  z-index: 100;
+  min-width: 180px;
+}
+
+.sort-menu-item {
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #3c4043;
+  cursor: pointer;
+}
+
+.sort-menu-item:hover {
+  background: #f8f9fa;
+}
+
+.export-grades-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.export-grades-btn:hover {
+  background: #0d62d9;
+}
+
+.export-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.gradebook-overall {
+  font-size: 14px;
+  color: #5f6368;
+}
+
+.gradebook-overall strong {
+  color: #1a73e8;
+  font-size: 16px;
+}
+/* Fix for quiz card menu positioning */
+.exam-card {
+  position: relative;
+}
+
+.exam-actions-dropdown {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+}
+
+
+
+.exam-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+}
+
+.exam-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.menu-item-icon {
+  margin-right: 8px;
+  width: 16px;
+}
+
+.exam-menu-item.delete {
+  color: #ef4444;
+}
+/* View Summary Button Styles */
+.action-btn.summary {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.action-btn.summary:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.action-btn.summary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Exam card summary button position */
+.exam-card .exam-action-button {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+/* Violation Summary Menu Item */
+.exam-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #374151;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.exam-menu-item:hover {
+  background-color: #f3f4f6;
+}
+
+.exam-menu-item.delete {
+  color: #dc2626;
+}
+
+.exam-menu-item.delete:hover {
+  background-color: #fef2f2;
+}
+
+.menu-item-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Violation Summary Card Info */
+.exam-card {
+  position: relative;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+}
+
+.exam-card:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.exam-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.exam-title-section {
+  flex: 1;
+  margin-right: 8px;
+}
+
+.exam-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px 0;
+}
+
+.exam-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+}
+
+.exam-status {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.exam-status.posted {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.exam-status.draft {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.exam-status.ended {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Type badge */
+.exam-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* Add some spacing for the menu button */
+.exam-actions-dropdown {
+  position: relative;
+>>>>>>> backupRepo/main
 }

@@ -38,7 +38,11 @@ const AdminLayout = () => {
       <aside className="admin-sidebar">
         <div className="sidebar-header">
           <div className="sidebar-brand">
+<<<<<<< HEAD
             <div className="brand-icon">🎯</div>
+=======
+            <div className="brand-icon"></div>
+>>>>>>> backupRepo/main
             {sidebarOpen && <h2 className="brand-text">ExamPro Admin</h2>}
           </div>
           <button 

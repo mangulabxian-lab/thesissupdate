@@ -1,0 +1,14 @@
+﻿capstone_user==REMOVED_MONGO_USER
+***REMOVED***==REMOVED_MONGO_PASSWORD
+mongodb+srv://capstone_user:***REMOVED***@cluster0.zew75dg.mongodb.net/proctoring?retryWrites=true&w=majority==REMOVED_MONGO_URI
+
+***REMOVED***==REMOVED_JWT_SECRET
+***REMOVED***==REMOVED_ADMIN_JWT_SECRET
+
+328392712581-bs2t7juamjsvua0svjse2l2elgfcgusm.apps.googleusercontent.com==REMOVED_GOOGLE_CLIENT_ID
+***REMOVED***==REMOVED_GOOGLE_CLIENT_SECRET
+
+***REMOVED***==REMOVED_EMAIL
+***REMOVED***==REMOVED_EMAIL_APP_PASSWORD
+
+***REMOVED***==REMOVED_RECAPTCHA_SECRET_KEY

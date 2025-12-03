@@ -5,6 +5,7 @@ import { io } from 'socket.io-client';
 import api, { startExamSession, endExamSession } from '../lib/api';
 import './TeacherExamSession.css';
 import TeacherProctoringControls from './TeacherProctoringControls';
+import DetectionLog from './detection-log';
 
 
 export default function TeacherExamSession() {
@@ -1900,7 +1901,6 @@ const renderStudentVideos = () => {
                       <div key={alertIndex} className={`alert-item-mini ${alert.type || 'warning'}`}>
                         <span className="alert-icon-mini">
                           {alert.detectionType?.includes('audio') ? '🎤' :
-                           alert.detectionType?.includes('tab_switch') ? '💻' :
                            alert.detectionType?.includes('gesture') ? '🤚' :
                            alert.detectionType?.includes('screenshot') ? '📸' :
                            alert.detectionType?.includes('face') ? '👁️' :
@@ -2059,7 +2059,7 @@ const renderStudentVideos = () => {
       </span>
     )}
   </button>
-  // 4. Render the Detection Log component
+
 {showDetectionLog && (
   <div className="detection-log-modal">
     <div className="detection-log-content">
@@ -2079,47 +2079,7 @@ const renderStudentVideos = () => {
     </div>
   </div>
 )}
-.detection-log-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
 
-.detection-log-content {
-  background: #1a1a2e;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 1400px;
-  max-height: 90vh;
-  overflow-y: auto;
-  position: relative;
-}
-
-.close-log-btn {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: #ff6b6b;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  z-index: 1001;
-}
 
 
 

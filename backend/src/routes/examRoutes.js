@@ -2190,6 +2190,39 @@ const parseDOCX = async (filePath) => {
 
 // ===== ASYNC EXAM TIMER MANAGEMENT =====
 // Ilagay ito SA BABA bago ang module.exports
+// routes/examRoutes.js o kung saan man
+router.post('/:examId/log-violation', async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const { studentId, violationType, message, severity } = req.body;
+    
+    // I-save sa database
+    const violation = await Violation.create({
+      examId,
+      studentId,
+      violationType,
+      message,
+      severity,
+      timestamp: new Date()
+    });
+    
+    // I-emit sa socket
+    req.io.to(`exam-${examId}`).emit('proctoring-alert', {
+      studentSocketId: studentId,
+      message: message,
+      type: severity === 'high' ? 'danger' : 'warning',
+      severity: severity,
+      timestamp: new Date().toLocaleTimeString(),
+      detectionType: violationType
+    });
+    
+    res.json({ success: true, violation });
+  } catch (error) {
+    console.error('Error logging violation:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 
 router.post('/:examId/start-async-timer', async (req, res) => {
   try {

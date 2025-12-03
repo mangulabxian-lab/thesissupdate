@@ -4,7 +4,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { getQuizForStudent, submitQuizAnswers } from '../lib/api';
 import './StudentQuizPage.css';
-
+import api from '../lib/api'; // Ito yung kulang!
 // ==================== WAITING ROOM COMPONENT ====================
 const WaitingRoomComponent = React.memo(({ 
   requiresCamera, 
@@ -13,8 +13,12 @@ const WaitingRoomComponent = React.memo(({
   onCancel,
   examTitle,
   className,
-  teacherDetectionSettings
+  teacherDetectionSettings,
+  examType = 'asynchronous',// ✅ ADD THIS PROP
+   waitingRoomRequired = true // ✅ NEW PROP
 }) => {
+
+  
   const [checkingPermissions, setCheckingPermissions] = useState(true);
   const [permissionStatus, setPermissionStatus] = useState({
     camera: { granted: false, error: '' },
@@ -79,8 +83,37 @@ const WaitingRoomComponent = React.memo(({
       console.error('Permission check error:', error);
     } finally {
       setCheckingPermissions(false);
+
     }
+    
   }, [requiresCamera, requiresMicrophone]);
+
+  useEffect(() => {
+    const checkIfCanProceed = () => {
+      // For async exams: Can proceed immediately if permissions granted
+      if (examType === 'asynchronous' && canEnterExam) {
+        console.log('✅ Async exam - Student can proceed');
+        // Auto-proceed after 3 seconds
+        const timer = setTimeout(() => {
+          if (canEnterExam) {
+            onExamStarted();
+          }
+        }, 3000);
+        
+        return () => clearTimeout(timer);
+      }
+      
+      // For live classes: Wait for teacher signal
+      if (examType === 'live-class' && canEnterExam) {
+        console.log('🎥 Live class - Waiting for teacher signal');
+        // Do NOT auto-proceed - wait for socket event
+      }
+    };
+    
+    if (canEnterExam) {
+      checkIfCanProceed();
+    }
+  }, [canEnterExam, examType, onExamStarted]);
 
   const getErrorMessage = (error) => {
     switch (error.name) {
@@ -130,6 +163,27 @@ const WaitingRoomComponent = React.memo(({
         </div>
 
         <div className="waiting-content">
+        
+<div className="waiting-content">
+  {/* ✅ ASYNC EXAM STRICT WARNING */}
+  {examType === 'asynchronous' && (
+    <div className="async-exam-warning strict">
+      <div className="warning-icon">🔒</div>
+      <div className="warning-content">
+        <h4>🔒 Strict Proctoring Mode</h4>
+        <p><strong>This is an asynchronous exam with STRICT proctoring requirements:</strong></p>
+        <ul className="strict-rules">
+          {requiresCamera && <li>📹 <strong>Camera MUST be ON throughout the exam</strong></li>}
+          {requiresMicrophone && <li>🎤 <strong>Microphone MUST be ON for audio monitoring</strong></li>}
+          <li>👁️ <strong>Face detection will be monitored continuously</strong></li>
+          <li>🎯 <strong>You cannot pause or disable monitoring</strong></li>
+          <li>⏰ <strong>Timer starts immediately upon entry</strong></li>
+        </ul>
+        <p className="critical-text">You will be automatically disqualified if monitoring is interrupted.</p>
+      </div>
+    </div>
+  )}
+</div>
           {/* ✅ MICROPHONE REQUIREMENT WARNING */}
           {requiresMicrophone && (
             <div className="requirement-warning critical">
@@ -1309,34 +1363,31 @@ export default function StudentQuizPage() {
   // Refs
   const socketRef = useRef(null);
   const peerConnectionRef = useRef(null);
+  const timerRef = useRef(null);
+const lastTimerUpdateRef = useRef(0);
+const isAutoSubmitWarningShown = useRef(false);
 
 const [examType, setExamType] = useState('asynchronous'); // Default to async
 
-  // ==================== TIMER PERSISTENCE FUNCTIONS ====================
-// DAGDAGIN ito sa StudentQuizPage.jsx bago ang loadQuiz function
 
+
+
+// ==================== TIMER PERSISTENCE FUNCTIONS ====================
 const saveTimerToLocalStorage = (time, isRunning) => {
-  // ✅ THROTTLE SAVES - Only save every 5 seconds
-  const now = Date.now();
-  const lastSave = localStorage.getItem(`last-save-${examId}`);
-  
-  if (lastSave && now - parseInt(lastSave) < 5000) {
-    return; // Skip save if less than 5 seconds since last save
-  }
-  
   const timerData = {
     examId: examId,
     timeLeft: time,
     isTimerRunning: isRunning,
-    lastUpdated: new Date().toISOString()
+    lastUpdated: new Date().toISOString(),
+    savedAt: Date.now()
   };
   
   localStorage.setItem(`timer-${examId}`, JSON.stringify(timerData));
-  localStorage.setItem(`last-save-${examId}`, now.toString());
-  
-  console.log('💾 Timer saved to localStorage:', timerData);
+  console.log('💾 Timer saved to localStorage:', {
+    time: formatTime(time),
+    running: isRunning
+  });
 };
-
 
 const loadTimerFromLocalStorage = () => {
   try {
@@ -1357,10 +1408,25 @@ const clearTimerFromLocalStorage = () => {
   console.log('🧹 Timer cleared from localStorage');
 };
 
+// ==================== FORMAT TIME FUNCTION ====================
+const formatTime = (seconds) => {
+  if (seconds === null || seconds === undefined) return '00:00';
+  
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  if (hrs > 0) {
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  } else {
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+}
 
 
   // ==================== QUIZ MANAGEMENT ====================
 
+// StudentQuizPage.jsx - UPDATE loadQuiz function
 const loadQuiz = useCallback(async () => {
   try {
     setLoading(true);
@@ -1375,37 +1441,57 @@ const loadQuiz = useCallback(async () => {
       const examTypeFromData = quizData.examType || 'asynchronous';
       setExamType(examTypeFromData);
       
-      // ✅ FIX: ASYNCHRONOUS EXAM - AUTO-START TIMER
+      console.log('🔍 Exam Type Detected:', examTypeFromData);
+      console.log('📊 Quiz Data for Timer:', {
+        timerSettings: quizData.timerSettings,
+        timeLimit: quizData.timeLimit,
+        examType: quizData.examType,
+        totalSeconds: quizData.timerSettings?.totalSeconds
+      });
+      
+      // ✅ CALCULATE TOTAL SECONDS - USE PRIORITY ORDER
+      let totalSeconds = 0;
+      
+      // Priority 1: Use timerSettings.totalSeconds (direct seconds)
+      if (quizData.timerSettings?.totalSeconds) {
+        totalSeconds = quizData.timerSettings.totalSeconds;
+        console.log('⏰ Using timerSettings.totalSeconds:', totalSeconds);
+      }
+      // Priority 2: Use timeLimit (ALWAYS IN MINUTES - convert to seconds)
+      else if (quizData.timeLimit) {
+        totalSeconds = quizData.timeLimit * 60; // ALWAYS convert minutes to seconds
+        console.log('⏰ Using timeLimit (minutes converted to seconds):', {
+          minutes: quizData.timeLimit,
+          seconds: totalSeconds
+        });
+      }
+      // Priority 3: Default fallback (1 hour)
+      else {
+        totalSeconds = 3600; // 1 hour default
+        console.log('⚠️ No timer found, using default 1 hour');
+      }
+      
+      console.log('✅ Final timer calculation:', {
+        seconds: totalSeconds,
+        formatted: formatTime(totalSeconds),
+        examType: examTypeFromData
+      });
+      
+      // ✅ SET TIMER BASED ON EXAM TYPE
       if (examTypeFromData === 'asynchronous') {
-        // For async exams, use teacher's timer settings
-        if (quizData.timerSettings?.totalSeconds) {
-          // Use detailed timer settings from teacher
-          setTimeLeft(quizData.timerSettings.totalSeconds);
-          setIsTimerRunning(true); // ✅ AUTO-START FOR ASYNC
-          console.log('⏰ Async exam - Auto-starting timer:', {
-            seconds: quizData.timerSettings.totalSeconds,
-            formatted: formatTime(quizData.timerSettings.totalSeconds)
-          });
-        } else if (quizData.timeLimit) {
-          // Fallback: convert minutes to seconds
-          const teacherTimeInSeconds = quizData.timeLimit * 60;
-          setTimeLeft(teacherTimeInSeconds);
-          setIsTimerRunning(true); // ✅ AUTO-START FOR ASYNC
-          console.log('⏰ Async exam - Auto-starting timer (converted):', {
-            minutes: quizData.timeLimit,
-            seconds: teacherTimeInSeconds
-          });
-        } else {
-          // Default fallback if no timer from teacher
-          setTimeLeft(60 * 60); // 1 hour default
-          setIsTimerRunning(true); // ✅ AUTO-START FOR ASYNC
-          console.log('⏰ Async exam - Using default timer (1 hour)');
-        }
+        // ASYNC EXAMS: AUTO-START IMMEDIATELY
+        console.log('⏰ Async exam detected - AUTO-STARTING timer');
+        setTimeLeft(totalSeconds);
+        setIsTimerRunning(true);
+        
+        // Save to localStorage immediately
+        saveTimerToLocalStorage(totalSeconds, true);
+        
       } else if (examTypeFromData === 'live-class') {
-        // For live classes, wait for teacher to start
-        setTimeLeft(0); // No timer for live class
+        // LIVE CLASS: Wait for teacher
+        console.log('🎥 Live class exam - Waiting for teacher timer');
+        setTimeLeft(0);
         setIsTimerRunning(false);
-        console.log('🎥 Live class exam - Waiting for teacher');
       }
       
       // Load answers as before
@@ -1453,128 +1539,316 @@ const loadQuiz = useCallback(async () => {
     handleAnswerChange(questionIndex, newAnswers);
   }, [answers, handleAnswerChange]);
 
-  const handleSubmitQuiz = async (isAutoSubmit = false) => {
-    if (!isAutoSubmit) {
-      if (!window.confirm('Are you sure you want to submit your answers?')) return;
+// StudentQuizPage.jsx - UPDATE handleSubmitQuiz
+// StudentQuizPage.jsx - COMPLETE FIXED handleSubmitQuiz
+const handleSubmitQuiz = async (isAutoSubmit = false) => {
+  // ✅ PREVENT MULTIPLE SUBMISSIONS
+  if (submitting) {
+    console.log('⚠️ Already submitting, skipping duplicate request');
+    return;
+  }
+  
+  if (!isAutoSubmit) {
+    if (!window.confirm('Are you sure you want to submit your answers?')) return;
+  }
+  
+  // Check permissions
+  if ((requiresCamera && !cameraActive) || (requiresMicrophone && !microphoneActive)) {
+    const proceed = isAutoSubmit || window.confirm(
+      'Monitoring is not fully active. This may be reported to your instructor. Continue with submission?'
+    );
+    if (!proceed) return;
+  }
+
+  setSubmitting(true);
+  console.log('📤 Starting quiz submission...', {
+    examId,
+    answersCount: Object.keys(answers).length,
+    isAutoSubmit,
+    examType
+  });
+  
+  try {
+    // ✅ PREPARE ANSWERS IN CORRECT FORMAT
+    const formattedAnswers = Object.entries(answers).map(([questionIndex, answer]) => ({
+      questionIndex: parseInt(questionIndex),
+      answer: answer,
+      questionType: quiz?.questions?.[questionIndex]?.type || 'unknown'
+    }));
+    
+    console.log('📦 Prepared answers for submission:', {
+      formattedAnswersCount: formattedAnswers.length,
+      sampleAnswer: formattedAnswers[0]
+    });
+    
+    // ✅ SUBMIT USING API FUNCTION
+    const submissionResponse = await submitQuizAnswers(examId, formattedAnswers);
+    
+    console.log('📊 Submission API response:', submissionResponse);
+    
+    if (submissionResponse.success) {
+      console.log('✅ Quiz answers submitted successfully');
+      
+      // ✅ CLEAR TIMER FROM LOCALSTORAGE
+      clearTimerFromLocalStorage();
+      
+      // Stop timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
+      // ✅ MARK EXAM AS COMPLETED IN BACKEND
+      try {
+        const completionResponse = await api.post(`/exams/${examId}/complete`, {
+          score: submissionResponse.data?.score || 0,
+          maxScore: submissionResponse.data?.maxScore || quiz?.questions?.length || 0,
+          percentage: submissionResponse.data?.percentage || 0,
+          answers: formattedAnswers,
+          submittedAt: new Date().toISOString(),
+          isAutoSubmitted: isAutoSubmit,
+          examType: examType
+        });
+        console.log("✅ Exam marked as completed:", completionResponse.data);
+      } catch (completionError) {
+        console.error("⚠️ Failed to mark exam as completed:", completionError);
+        // Continue anyway since answers were submitted
+      }
+
+      // ✅ SHOW SUCCESS MESSAGE
+      if (isAutoSubmit) {
+        alert('⏰ Time is up! Your answers have been automatically submitted.');
+      } else {
+        alert('✅ Answers submitted successfully! Your exam has been moved to "Done" section.');
+      }
+      
+      // ✅ CLEANUP RESOURCES
+      cleanupResources();
+      
+      // ✅ NAVIGATE TO DASHBOARD
+      setTimeout(() => {
+        navigate('/dashboard', { 
+          state: { 
+            examCompleted: true,
+            examId: examId,
+            message: isAutoSubmit ? 'Time expired - Quiz auto-submitted' : 'Quiz completed successfully!',
+            isAutoSubmitted: isAutoSubmit,
+            score: submissionResponse.data?.score,
+            percentage: submissionResponse.data?.percentage
+          }
+        });
+      }, 2000);
+      
+    } else {
+      // ❌ HANDLE SUBMISSION FAILURE
+      console.error('❌ Submission failed:', submissionResponse.message);
+      
+      // Try alternative submission method
+      await tryAlternativeSubmission(examId, formattedAnswers, isAutoSubmit);
     }
     
-    if ((requiresCamera && !cameraActive) || (requiresMicrophone && !microphoneActive)) {
-      const proceed = isAutoSubmit || window.confirm(
-        'Monitoring is not fully active. This may be reported to your instructor. Continue with submission?'
-      );
-      if (!proceed) return;
-    }
-
-    setSubmitting(true);
-    try {
-      console.log('📤 Submitting quiz answers...');
+  } catch (error) {
+    console.error('❌ CRITICAL Submission error:', error);
+    
+    // ❌ USER-FRIENDLY ERROR HANDLING
+    let errorMessage = 'Failed to submit answers. ';
+    
+    if (error.response) {
+      // Server responded with error
+      console.error('Server error response:', error.response.data);
+      errorMessage += `Server error: ${error.response.status}. `;
       
-      const submissionResponse = await submitQuizAnswers(examId, answers);
-      
-      if (submissionResponse.success) {
-        console.log('✅ Quiz answers submitted successfully');
-         // ✅ CLEAR TIMER FROM LOCALSTORAGE
-      clearTimerFromLocalStorage();
-
-        try {
-          await api.post(`/exams/${examId}/complete`, {
-            score: submissionResponse.data.score,
-            maxScore: submissionResponse.data.maxScore,
-            percentage: submissionResponse.data.percentage,
-            answers: Object.entries(answers).map(([index, answer]) => ({
-              questionIndex: parseInt(index),
-              answer: answer
-            }))
-          });
-          console.log("✅ Exam marked as completed in backend");
-        } catch (completionError) {
-          console.error("❌ Failed to mark exam as completed:", completionError);
-        }
-
-        if (isAutoSubmit) {
-          alert('⏰ Time is up! Your answers have been automatically submitted.');
-        } else {
-          alert('✅ Answers submitted successfully! Your exam has been moved to "Done" section.');
-        }
-        
-        if (localStream) {
-          localStream.getTracks().forEach(track => track.stop());
-        }
-        if (peerConnectionRef.current) {
-          peerConnectionRef.current.close();
-        }
-        
-        if (socketRef.current) {
-          socketRef.current.disconnect();
-          socketRef.current = null;
-        }
-        
-        setTimeout(() => {
-          navigate('/dashboard', { 
-            state: { 
-              examCompleted: true,
-              examId: examId,
-              message: isAutoSubmit ? 'Time expired - Quiz auto-submitted' : 'Quiz completed successfully!'
-            }
-          });
-        }, 2000);
-        
-      } else {
-        throw new Error(submissionResponse.message || 'Submission failed');
+      if (error.response.status === 400) {
+        errorMessage += 'Invalid request format.';
+      } else if (error.response.status === 404) {
+        errorMessage += 'Exam not found.';
+      } else if (error.response.status === 403) {
+        errorMessage += 'Not authorized.';
+      } else if (error.response.status === 500) {
+        errorMessage += 'Server error. Please contact instructor.';
       }
-    } catch (error) {
-      console.error('Submission error:', error);
-      alert('❌ Failed to submit answers. Please check your connection and try again.');
-    } finally {
-      setSubmitting(false);
+    } else if (error.request) {
+      // No response received
+      console.error('No response from server:', error.request);
+      errorMessage += 'No response from server. Check your internet connection.';
+    } else {
+      // Other errors
+      errorMessage += error.message || 'Unknown error occurred.';
     }
+    
+    alert(`❌ ${errorMessage}`);
+    
+    // ✅ RETRY LOGIC FOR AUTO-SUBMIT
+    if (isAutoSubmit) {
+      console.log('🔄 Auto-submit failed, will retry in background...');
+      await retryAutoSubmit(examId, answers, isAutoSubmit);
+    }
+  } finally {
+    setSubmitting(false);
+  }
+};
+
+// ✅ HELPER FUNCTION: CLEANUP RESOURCES
+const cleanupResources = () => {
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    console.log('🔴 Local stream stopped');
+  }
+  
+  if (peerConnectionRef.current) {
+    peerConnectionRef.current.close();
+    peerConnectionRef.current = null;
+    console.log('🔴 WebRTC connection closed');
+  }
+  
+  if (socketRef.current) {
+    socketRef.current.disconnect();
+    socketRef.current = null;
+    console.log('🔴 Socket disconnected');
+  }
+};
+
+// ✅ HELPER FUNCTION: ALTERNATIVE SUBMISSION METHOD
+const tryAlternativeSubmission = async (examId, formattedAnswers, isAutoSubmit) => {
+  try {
+    console.log('🔄 Trying alternative submission method...');
+    
+    // Try direct fetch as alternative
+    const token = localStorage.getItem('token');
+    const response = await fetch(`http://localhost:3000/api/exams/${examId}/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ answers: formattedAnswers })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Alternative submission succeeded:', data);
+      
+      alert('✅ Answers submitted successfully via alternative method!');
+      
+      setTimeout(() => {
+        navigate('/dashboard', { 
+          state: { 
+            examCompleted: true,
+            examId: examId,
+            message: 'Submitted via alternative method'
+          }
+        });
+      }, 2000);
+    } else {
+      throw new Error(`Alternative submission failed: ${response.status}`);
+    }
+  } catch (altError) {
+    console.error('❌ Alternative submission also failed:', altError);
+    
+    // Save answers locally as last resort
+    saveAnswersLocally(examId, formattedAnswers, isAutoSubmit);
+  }
+};
+
+// ✅ HELPER FUNCTION: SAVE ANSWERS LOCALLY
+const saveAnswersLocally = (examId, formattedAnswers, isAutoSubmit) => {
+  const backupData = {
+    examId: examId,
+    answers: formattedAnswers,
+    timestamp: new Date().toISOString(),
+    isAutoSubmitted: isAutoSubmit,
+    examType: examType
   };
+  
+  localStorage.setItem(`exam-backup-${examId}`, JSON.stringify(backupData));
+  console.log('💾 Answers saved locally as backup:', backupData);
+  
+  alert('⚠️ Answers saved locally. Please contact your instructor. ' +
+        'Your answers have been saved and can be retrieved later.');
+  
+  setTimeout(() => {
+    navigate('/dashboard', { 
+      state: { 
+        examCompleted: false,
+        examId: examId,
+        message: 'Answers saved locally - contact instructor',
+        hasBackup: true
+      }
+    });
+  }, 3000);
+};
+
+// ✅ HELPER FUNCTION: RETRY AUTO-SUBMIT
+const retryAutoSubmit = async (examId, answers, isAutoSubmit) => {
+  // Save current state for retry
+  const retryData = {
+    examId,
+    answers: Object.entries(answers).map(([idx, ans]) => ({
+      questionIndex: parseInt(idx),
+      answer: ans
+    })),
+    retryCount: 0,
+    maxRetries: 3
+  };
+  
+  localStorage.setItem(`retry-submit-${examId}`, JSON.stringify(retryData));
+  
+  // Show retry message
+  alert('🔄 Auto-submit failed. System will retry in background. ' +
+        'Do not close this page until submission succeeds.');
+  
+  // Set up retry mechanism
+  const retryInterval = setInterval(async () => {
+    const savedRetry = localStorage.getItem(`retry-submit-${examId}`);
+    if (!savedRetry) {
+      clearInterval(retryInterval);
+      return;
+    }
+    
+    const retryInfo = JSON.parse(savedRetry);
+    retryInfo.retryCount++;
+    
+    if (retryInfo.retryCount <= retryInfo.maxRetries) {
+      console.log(`🔄 Retry ${retryInfo.retryCount}/${retryInfo.maxRetries}...`);
+      
+      try {
+        await submitQuizAnswers(examId, retryInfo.answers);
+        
+        // Success!
+        clearInterval(retryInterval);
+        localStorage.removeItem(`retry-submit-${examId}`);
+        
+        alert('✅ Answers submitted successfully on retry!');
+        navigate('/dashboard');
+        
+      } catch (retryError) {
+        console.error(`Retry ${retryInfo.retryCount} failed:`, retryError);
+        localStorage.setItem(`retry-submit-${examId}`, JSON.stringify(retryInfo));
+      }
+    } else {
+      // Max retries reached
+      clearInterval(retryInterval);
+      localStorage.removeItem(`retry-submit-${examId}`);
+      
+      saveAnswersLocally(examId, retryInfo.answers, true);
+    }
+  }, 10000); // Retry every 10 seconds
+};
+
 // ==================== ACCURATE TAB SWITCHING DETECTION ====================
+// ✅ ACCURATE TAB SWITCHING DETECTION
 useEffect(() => {
   let lastFocusTime = Date.now();
   let isWindowFocused = true;
   let debounceTimer = null;
-
-  const handleFocus = () => {
-    const now = Date.now();
-    const timeAway = now - lastFocusTime;
-    
-    // ✅ IGNORE SHORT ABSENCES (less than 1 second)
-    if (timeAway > 1000 && !isWindowFocused) {
-      console.log('🔍 Window focused after:', timeAway + 'ms');
-      isWindowFocused = true;
-      
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
-        debounceTimer = null;
-      }
-    }
-  };
-
-  const handleBlur = () => {
-    lastFocusTime = Date.now();
-    isWindowFocused = false;
-    
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-    }
-    
-    debounceTimer = setTimeout(() => {
-      if (!isWindowFocused && examStarted && permissionsGranted) {
-        const newCount = windowBlurCount + 1;
-        setWindowBlurCount(newCount);
-        console.log('🪟 Window blur detected (debounced)! Count:', newCount);
-      }
-    }, 500);
-  };
-
+  
   const handleVisibilityChange = () => {
     // ✅ CHECK IF TAB SWITCH DETECTION IS ENABLED BY TEACHER
     if (!teacherDetectionSettings.tabSwitchDetection) {
       console.log('🛑 Tab switch detection is DISABLED by teacher - ignoring');
       return;
     }
-
+    
     if (document.hidden) {
       const now = Date.now();
       const timeSinceLastSwitch = now - lastTabSwitchTime;
@@ -1587,66 +1861,75 @@ useEffect(() => {
         
         console.log('💻 Tab switch detected! Count:', newCount, 'Time since last:', timeSinceLastSwitch + 'ms');
         
-        // ✅ ONLY SEND TO SERVER IF TAB SWITCH DETECTION IS ENABLED
-        if (socketRef.current && teacherDetectionSettings.tabSwitchDetection) {
-          socketRef.current.emit('tab-switch-detected', {
+        // ✅ SEND TO SERVER WITH COMPLETE DATA
+        if (socketRef.current) {
+          const alertData = {
             examId: examId,
             studentSocketId: socketRef.current.id,
             timestamp: new Date().toISOString(),
             count: newCount,
-            timeSinceLast: timeSinceLastSwitch
+            timeSinceLast: timeSinceLastSwitch,
+            type: 'danger',
+            severity: 'high',
+            message: `💻 Tab switch detected - Student looked away from exam (Count: ${newCount})`
+          };
+          
+          socketRef.current.emit('tab-switch-detected', alertData);
+          
+          // ✅ ALSO SEND AS PROCTORING ALERT FOR BACKUP
+          socketRef.current.emit('forward-proctoring-alert', {
+            ...alertData,
+            detectionType: 'tab_switching'
           });
         }
         
-        // ✅ ONLY SHOW ALERT AND COUNT ATTEMPTS IF TAB SWITCH DETECTION IS ENABLED
-        if (teacherDetectionSettings.tabSwitchDetection) {
-          const newAlert = {
-            id: Date.now(),
-            message: '💻 Tab switch detected - Focus on the exam!',
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'danger',
-            severity: 'high',
-            detectionType: 'tab_switching'
+        // ✅ LOCAL ALERT
+        const newAlert = {
+          id: Date.now(),
+          message: `💻 Tab switch detected (${newCount} times) - Focus on the exam!`,
+          timestamp: new Date().toLocaleTimeString(),
+          type: 'danger',
+          severity: 'high',
+          detectionType: 'tab_switching'
+        };
+        
+        setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
+        
+        // ✅ UPDATE LOCAL ATTEMPTS
+        setStudentAttempts(prev => {
+          const newAttempts = prev.currentAttempts + 0.5; // Tab switch = 0.5 attempt
+          const attemptsLeft = Math.max(0, prev.maxAttempts - newAttempts);
+          
+          const updated = {
+            ...prev,
+            currentAttempts: newAttempts,
+            attemptsLeft: attemptsLeft,
+            history: [
+              ...prev.history,
+              {
+                timestamp: new Date().toISOString(),
+                violation: 'tab_switching',
+                message: `Tab switch detected (${newCount} times)`,
+                attemptsLeft: attemptsLeft,
+                timeSinceLast: timeSinceLastSwitch
+              }
+            ].slice(-10)
           };
           
-          setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
+          // ✅ WARNINGS
+          if (attemptsLeft <= 3 && attemptsLeft > 0) {
+            alert(`⚠️ Warning: Only ${attemptsLeft} attempt(s) left! Tab switching detected.`);
+          }
           
-          setStudentAttempts(prev => {
-            const newAttempts = prev.currentAttempts + 1;
-            const attemptsLeft = Math.max(0, prev.maxAttempts - newAttempts);
-            
-            const updated = {
-              ...prev,
-              currentAttempts: newAttempts,
-              attemptsLeft: attemptsLeft,
-              history: [
-                ...prev.history,
-                {
-                  timestamp: new Date().toISOString(),
-                  violation: 'tab_switching',
-                  message: 'Tab switch detected',
-                  attemptsLeft: attemptsLeft,
-                  timeSinceLast: timeSinceLastSwitch
-                }
-              ].slice(-10)
-            };
-            
-            if (attemptsLeft <= 3 && attemptsLeft > 0) {
-              alert(`⚠️ Warning: Only ${attemptsLeft} attempt(s) left!`);
-            }
-            
-            if (attemptsLeft <= 0) {
-              alert('❌ You have been disconnected due to excessive violations.');
-              setTimeout(() => {
-                navigate('/dashboard');
-              }, 3000);
-            }
-            
-            return updated;
-          });
-        } else {
-          console.log('🛑 Tab switch detection disabled - not counting as attempt');
-        }
+          if (attemptsLeft <= 0) {
+            alert('❌ You have been disconnected due to excessive violations.');
+            setTimeout(() => {
+              navigate('/dashboard');
+            }, 3000);
+          }
+          
+          return updated;
+        });
       } else {
         console.log('⏰ Tab switch ignored - too soon since last detection:', timeSinceLastSwitch + 'ms');
       }
@@ -1658,21 +1941,158 @@ useEffect(() => {
 
   if (examStarted && permissionsGranted) {
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('blur', handleBlur);
-    
-    console.log('🔍 Accurate tab/window monitoring ACTIVATED');
+    console.log('🔍 Tab switching monitoring ACTIVATED');
   }
 
   return () => {
     document.removeEventListener('visibilitychange', handleVisibilityChange);
-    window.removeEventListener('focus', handleFocus);
-    window.removeEventListener('blur', handleBlur);
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }
   };
-}, [examId, examStarted, permissionsGranted, tabSwitchCount, windowBlurCount, navigate, lastTabSwitchTime, teacherDetectionSettings.tabSwitchDetection]); // ✅ ADD teacherDetectionSettings.tabSwitchDetection
+}, [examId, examStarted, permissionsGranted, tabSwitchCount, lastTabSwitchTime, teacherDetectionSettings.tabSwitchDetection]);
+// ==================== TIMER MANAGEMENT ====================
+// StudentQuizPage.jsx - UPDATE timer effect for better auto-submit
+useEffect(() => {
+  console.log('⏰ Timer effect running:', { 
+    isTimerRunning, 
+    timeLeft,
+    examType 
+  });
+  
+  if (isTimerRunning && timeLeft > 0) {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 0) {
+          clearInterval(timerRef.current);
+          return 0;
+        }
+        
+        const newTime = prev - 1;
+        
+        // ✅ AUTO-SUBMIT WHEN TIME REACHES 0
+        if (newTime <= 0) {
+          console.log('⏰ TIME UP! Triggering auto-submit...');
+          clearInterval(timerRef.current);
+          
+          // ✅ FORCE SUBMIT IMMEDIATELY
+          setTimeout(() => {
+            handleSubmitQuiz(true);
+          }, 100); // Small delay to ensure state is updated
+          
+          return 0;
+        }
+        
+        // ✅ WARNINGS
+        if (newTime === 60) { // 1 minute left
+          console.log('⚠️ 1 minute remaining');
+          if (!isAutoSubmitWarningShown.current) {
+            alert('⚠️ 1 minute remaining! Answers will be auto-submitted.');
+            isAutoSubmitWarningShown.current = true;
+          }
+        }
+        if (newTime === 300) { // 5 minutes left
+          console.log('⏰ 5 minutes remaining');
+          alert('⏰ 5 minutes remaining! Please finish up.');
+        }
+        
+        // Save progress every 30 seconds for async exams
+        if (newTime % 30 === 0 && examType === 'asynchronous') {
+          saveTimerToLocalStorage(newTime, true);
+          
+          // Also save answers progress
+          const progressData = {
+            examId,
+            answers,
+            savedAt: new Date().toISOString(),
+            timeLeft: newTime
+          };
+          localStorage.setItem(`exam-progress-${examId}`, JSON.stringify(progressData));
+        }
+        
+        return newTime;
+      });
+    }, 1000);
+    
+    console.log('⏰ Timer interval started');
+  } else {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+      console.log('⏰ Timer interval cleared');
+    }
+  }
+
+  return () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+      console.log('⏰ Timer cleanup');
+    }
+  };
+}, [isTimerRunning, timeLeft, examType]);
+
+// ==================== LOAD TIMER FROM TEACHER ====================
+// StudentQuizPage.jsx - UPDATE socket timer listeners
+useEffect(() => {
+  if (!socketRef.current) return;
+  
+  const handleTimerUpdate = (data) => {
+    console.log('🕒 Student received timer update:', data);
+    
+    // ✅ IGNORE TEACHER TIMER UPDATES FOR ASYNC EXAMS
+    if (examType === 'asynchronous') {
+      console.log('🛑 Ignoring teacher timer for async exam - using local timer');
+      return;
+    }
+    
+    let receivedTime = data.timeLeft;
+    
+    // Convert minutes to seconds if needed
+    if (receivedTime < 100 && receivedTime > 0) {
+      console.log('🔄 Converting minutes to seconds:', receivedTime);
+      receivedTime = receivedTime * 60;
+    }
+    
+    setTimeLeft(receivedTime);
+    setIsTimerRunning(data.isTimerRunning);
+    
+    // Save to localStorage
+    saveTimerToLocalStorage(receivedTime, data.isTimerRunning);
+    
+    console.log('✅ Student timer synced:', {
+      time: formatTime(receivedTime),
+      running: data.isTimerRunning
+    });
+  };
+
+  socketRef.current.on('exam-time-update', handleTimerUpdate);
+  
+  return () => {
+    if (socketRef.current) {
+      socketRef.current.off('exam-time-update', handleTimerUpdate);
+    }
+  };
+}, [examStarted, examType]);
+
+// ==================== REQUEST TIMER ON CONNECT ====================
+useEffect(() => {
+  if (socketRef.current && socketRef.current.connected && examStarted) {
+    // Request current timer state from teacher
+    setTimeout(() => {
+      socketRef.current.emit('student-time-request', {
+        studentSocketId: socketRef.current.id,
+        roomId: `exam-${examId}`,
+        examId: examId
+      });
+    }, 1000);
+  }
+}, [socketRef.current?.connected, examStarted, examId]);
+
 
   // ==================== PERMISSION HANDLERS ====================
   const handlePermissionsGranted = useCallback(() => {
@@ -1685,75 +2105,123 @@ useEffect(() => {
     navigate('/dashboard');
   }, [navigate]);
 
-const handleExamStart = useCallback(() => {
-  // ✅ MICROPHONE IS NOW REQUIRED FROM THE START
-  if (requiresMicrophone) {
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
-        stream.getTracks().forEach(track => track.stop());
-        setExamStarted(true);
-        setPermissionsGranted(true);
-        
-        // ✅ CHECK IF ASYNC EXAM - USE LOCAL TIMER
-        if (examType === 'asynchronous') {
-          console.log('⏰ Async exam - Starting local timer');
-          
-          // For async exams, use teacher's timer immediately
-          if (quiz?.timerSettings?.totalSeconds) {
-            setTimeLeft(quiz.timerSettings.totalSeconds);
-            setIsTimerRunning(true);
-          } else if (quiz?.timeLimit) {
-            setTimeLeft(quiz.timeLimit * 60);
-            setIsTimerRunning(true);
-          }
-          
-          // Save to localStorage
-          saveTimerToLocalStorage(timeLeft, true);
-        } else {
-          // For live classes, check saved timer
-          const savedTimer = loadTimerFromLocalStorage();
-          if (savedTimer && savedTimer.examId === examId) {
-            console.log('⏰ Resuming from saved timer:', savedTimer);
-            setTimeLeft(savedTimer.timeLeft);
-            setIsTimerRunning(savedTimer.isTimerRunning);
-          }
-        }
-        
-        loadQuiz();
-      })
-      .catch(error => {
-        alert('🎤 Microphone access is REQUIRED. Please grant microphone permission to start the exam.');
-        console.error('Microphone permission denied:', error);
+
+
+// Sa StudentQuizPage.jsx, baguhin ang handleExamStart:
+
+const handleExamStart = useCallback(async () => {
+  console.log('🎯 Starting exam, Type:', examType);
+  
+  // ✅ SIMPLE CHECK: Dapat naka-open ang camera at microphone
+  try {
+    if (requiresCamera) {
+      const cameraStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: 640, height: 480 } 
       });
-  } else {
-    setExamStarted(true);
-    setPermissionsGranted(true);
-    
-    // ✅ SIMILAR LOGIC FOR ASYNC EXAMS
-    if (examType === 'asynchronous') {
-      console.log('⏰ Async exam - Starting local timer (no mic)');
-      
-      if (quiz?.timerSettings?.totalSeconds) {
-        setTimeLeft(quiz.timerSettings.totalSeconds);
-        setIsTimerRunning(true);
-      } else if (quiz?.timeLimit) {
-        setTimeLeft(quiz.timeLimit * 60);
-        setIsTimerRunning(true);
-      }
-      
-      saveTimerToLocalStorage(timeLeft, true);
-    } else {
-      const savedTimer = loadTimerFromLocalStorage();
-      if (savedTimer && savedTimer.examId === examId) {
-        console.log('⏰ Resuming from saved timer:', savedTimer);
-        setTimeLeft(savedTimer.timeLeft);
-        setIsTimerRunning(savedTimer.isTimerRunning);
-      }
+      cameraStream.getTracks().forEach(track => track.stop());
     }
     
-    loadQuiz();
+    if (requiresMicrophone) {
+      const micStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      micStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // ✅ AFTER PERMISSIONS VERIFIED:
+    
+    // For live classes: Wait 5 seconds then auto-enter
+    if (examType === 'live-class') {
+      console.log('🎥 Live class - Waiting for 5 seconds...');
+      
+      // Show waiting message
+      alert('✅ Permissions verified! Entering exam in 5 seconds...');
+      
+      setTimeout(() => {
+        setExamStarted(true);
+        setPermissionsGranted(true);
+        loadQuiz();
+        
+        // Notify teacher student has entered
+        if (socketRef.current) {
+          socketRef.current.emit('student-entered-exam', {
+            examId: examId,
+            studentId: 'student-user',
+            studentSocketId: socketRef.current.id
+          });
+        }
+      }, 5000);
+      
+    } else {
+      // For async quiz: Enter immediately
+      setExamStarted(true);
+      setPermissionsGranted(true);
+      loadQuiz();
+    }
+    
+  } catch (error) {
+    console.error('❌ Permission denied:', error);
+    
+    if (requiresCamera && requiresMicrophone) {
+      alert('❌ Camera AND Microphone are REQUIRED! Please enable both.');
+    } else if (requiresCamera) {
+      alert('❌ Camera is REQUIRED! Please enable camera.');
+    } else if (requiresMicrophone) {
+      alert('🎤 Microphone is REQUIRED! Please enable microphone.');
+    }
   }
-}, [requiresMicrophone, loadQuiz, examId, examType, quiz]);
+}, [requiresCamera, requiresMicrophone, examType, loadQuiz, examId]);
+
+
+// Sa useEffect ng socket connection, DAGDAGAN ang mga listeners:
+useEffect(() => {
+  if (!socketRef.current) return;
+  
+  // ✅ NEW: Listen for teacher approval to enter exam
+  socketRef.current.on('teacher-approve-exam-entry', (data) => {
+    console.log('✅ Teacher approved exam entry:', data);
+    
+    if (data.examId === examId) {
+      // Ngayon lang papasok sa exam
+      setExamStarted(true);
+      setPermissionsGranted(true);
+      loadQuiz();
+      
+      alert('🎯 Teacher has started the exam! You may now enter.');
+    }
+  });
+  
+  // ✅ NEW: Listen for waiting room status updates
+  socketRef.current.on('waiting-room-update', (data) => {
+    console.log('🕒 Waiting room update:', data);
+    
+    if (data.examId === examId) {
+      // Update UI based on waiting room status
+      if (data.status === 'waiting') {
+        // Show waiting count
+        console.log(`👥 ${data.waitingCount} students in waiting room`);
+      }
+    }
+  });
+  
+  // ✅ NEW: Listen for teacher rejection
+  socketRef.current.on('teacher-reject-exam-entry', (data) => {
+    console.log('❌ Teacher rejected exam entry:', data);
+    
+    if (data.examId === examId) {
+      alert(`❌ ${data.reason || 'Teacher rejected your entry. Please check your camera and microphone.'}`);
+      
+      // Force back to waiting room
+      setExamStarted(false);
+      setPermissionsGranted(false);
+    }
+  });
+  
+}, [examId]);
 
   // ==================== SOCKET.IO SETUP ====================
   useEffect(() => {
@@ -1841,86 +2309,6 @@ newSocket.on('clear-timer-cache', (data) => {
     console.log('🧹 Timer cache cleared by teacher');
   }
 });
-newSocket.on('send-current-time', (data) => {
-  console.log('🕒 Received time from teacher:', {
-    timeLeft: data.timeLeft,
-    isTimerRunning: data.isTimerRunning,
-    examStarted: data.examStarted
-  });
-  
-  // ✅ FIX: Check if teacher sent minutes instead of seconds
-  let receivedTime = data.timeLeft;
-  
-  // If value is less than 100 and greater than 0, assume it's minutes
-  if (receivedTime < 100 && receivedTime > 0) {
-    console.log('🔄 Converting minutes to seconds:', receivedTime, 'minutes');
-    receivedTime = receivedTime * 60; // Convert to seconds
-  }
-  
-  // ✅ ALWAYS USE TEACHER'S TIME - OVERRIDE LOCALSTORAGE
-  setTimeLeft(receivedTime);
-  setIsTimerRunning(data.isTimerRunning);
-  
-  // Save teacher's time as source of truth
-  saveTimerToLocalStorage(receivedTime, data.isTimerRunning);
-  
-  console.log('✅ Timer synced with teacher:', {
-    received: data.timeLeft,
-    converted: receivedTime,
-    formatted: formatTime(receivedTime)
-  });
-  
-  if (data.examStarted && !examStarted) {
-    setExamStarted(true);
-    setPermissionsGranted(true);
-  }
-});
-
-      newSocket.on('proctoring-violation', (data) => {
-        console.log('⚠️ Student received proctoring violation:', data);
-        
-        setStudentAttempts(prev => {
-          const newAttempts = prev.currentAttempts + 1;
-          const attemptsLeft = Math.max(0, prev.maxAttempts - newAttempts);
-          
-          const updated = {
-            ...prev,
-            currentAttempts: newAttempts,
-            attemptsLeft: attemptsLeft,
-            history: [
-              ...prev.history,
-              {
-                timestamp: new Date().toISOString(),
-                violation: data.message || data.violationType,
-                attemptsLeft: attemptsLeft
-              }
-            ].slice(-10)
-          };
-          
-          if (attemptsLeft <= 3 && attemptsLeft > 0) {
-            alert(`⚠️ Warning: Only ${attemptsLeft} attempt(s) left!`);
-          }
-          
-          if (attemptsLeft <= 0) {
-            alert('❌ You have been disconnected due to excessive violations.');
-            setTimeout(() => {
-              navigate('/dashboard');
-            }, 3000);
-          }
-          
-          return updated;
-        });
-        
-        const newAlert = {
-          id: Date.now(),
-          message: data.message || 'Suspicious activity detected',
-          timestamp: new Date().toLocaleTimeString(),
-          type: data.type || 'warning',
-          severity: data.severity || 'medium'
-        };
-        
-        setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
-      });
 
       newSocket.on('student-violation', (data) => {
         console.log('⚠️ Received violation:', data);
@@ -2053,39 +2441,46 @@ newSocket.on('send-current-time', (data) => {
       }, 3000);
     });
 
-// ADD this conversion logic:
 newSocket.on('exam-time-update', (data) => {
-   if (examType === 'asynchronous') {
-    console.log('🛑 Ignoring teacher timer update for async exam');
+  const now = Date.now();
+  
+  // ✅ DEBOUNCE: Prevent multiple updates within 1 second
+  if (now - lastTimerUpdateRef.current < 1000) {
+    console.log('⏰ Debounced duplicate timer update');
     return;
   }
-  console.log('🕒 Received timer update from teacher:', {
-    timeLeft: data.timeLeft,
-    isTimerRunning: data.isTimerRunning,
-    teacher: data.teacherName,
-    timestamp: data.timestamp
-  });
   
-  // ✅ FIX: Convert if teacher sent minutes instead of seconds
-  let receivedTime = data.timeLeft;
+  lastTimerUpdateRef.current = now;
   
-  // Check if teacher sent minutes (if value is less than 100, assume minutes)
-  if (receivedTime < 100 && receivedTime > 0) {
-    console.log('🔄 Converting minutes to seconds:', receivedTime, 'minutes');
-    receivedTime = receivedTime * 60; // Convert minutes to seconds
+  if (examType === 'asynchronous') {
+    console.log('🛑 Ignoring teacher timer for async exam - using local timer');
+    return;
   }
   
-  // Save to localStorage with proper conversion
-  saveTimerToLocalStorage(receivedTime, data.isTimerRunning);
+  console.log('🕒 Processing timer update from teacher:', {
+    timeLeft: data.timeLeft,
+    isTimerRunning: data.isTimerRunning,
+    timestamp: new Date().toLocaleTimeString()
+  });
   
-  // Update state
+  // ✅ FIX: Convert minutes to seconds if needed
+  let receivedTime = data.timeLeft;
+  
+  if (receivedTime < 100 && receivedTime > 0) {
+    console.log('🔄 Converting minutes to seconds:', receivedTime);
+    receivedTime = receivedTime * 60;
+  }
+  
+  // ✅ SINGLE STATE UPDATE
   setTimeLeft(receivedTime);
   setIsTimerRunning(data.isTimerRunning);
   
-  console.log('✅ Timer updated:', {
-    received: data.timeLeft,
-    converted: receivedTime,
-    formatted: formatTime(receivedTime)
+  // ✅ Save ONCE (throttled by the function)
+  saveTimerToLocalStorage(receivedTime, data.isTimerRunning);
+  
+  console.log('✅ Timer synced:', {
+    time: formatTime(receivedTime),
+    running: data.isTimerRunning
   });
 });
 
@@ -2093,46 +2488,59 @@ newSocket.on('exam-time-update', (data) => {
     newSocket.on('webrtc-answer', handleWebRTCAnswer);
     newSocket.on('ice-candidate', handleICECandidate);
     // In socket event listeners, add:
+// KEEP THIS - eto yung sa backend alerts
+// Palitan ang existing na handler na ito:
 newSocket.on('proctoring-alert', (alertData) => {
-    console.log('🚨 Student received proctoring alert:', alertData);
-    
-    // ✅ UPDATE ATTEMPTS FROM SERVER
-    if (alertData.attemptsInfo) {
-        setStudentAttempts({
-            currentAttempts: alertData.attemptsInfo.currentAttempts,
-            maxAttempts: alertData.attemptsInfo.maxAttempts,
-            attemptsLeft: alertData.attemptsInfo.attemptsLeft,
-            history: alertData.attemptsInfo.violation_history || []
-        });
-        
-        // Show warning if attempts low
-        if (alertData.attemptsInfo.attemptsLeft <= 3 && alertData.attemptsInfo.attemptsLeft > 0) {
-            const newAlert = {
-                id: Date.now(),
-                message: `⚠️ Warning: ${alertData.attemptsInfo.attemptsLeft} attempt(s) remaining!`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: 'danger',
-                severity: 'high'
-            };
-            
-            setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
-        }
+  console.log('🚨 Student received proctoring alert:', alertData);
+  
+  // ✅ DITO MAG-FORWARD PAPUNTA SA TEACHER
+  const forwardData = {
+    examId: examId,
+    studentSocketId: socketRef.current.id,
+    message: alertData.message || 'Suspicious activity detected',
+    type: alertData.type || 'warning',
+    severity: alertData.severity || 'medium',
+    timestamp: new Date().toISOString(),
+    detectionType: alertData.detectionType || 'unknown',
+    confidence: alertData.confidence || 0.7,
+    attemptsInfo: {
+      currentAttempts: studentAttempts.currentAttempts + 1,
+      maxAttempts: studentAttempts.maxAttempts,
+      attemptsLeft: Math.max(0, studentAttempts.maxAttempts - (studentAttempts.currentAttempts + 1))
     }
-    
-    // Add the alert to display
-    const newAlert = {
-        id: Date.now(),
-        message: alertData.message || 'Suspicious activity detected',
-        timestamp: new Date().toLocaleTimeString(),
-        type: alertData.type || 'warning',
-        severity: alertData.severity || 'medium',
-        detectionType: alertData.detectionType
+  };
+  
+  // I-forward sa teacher
+  if (socketRef.current && examId) {
+    socketRef.current.emit('forward-proctoring-alert', forwardData);
+    console.log('📤 Student forwarding alert to teacher:', forwardData);
+  }
+  
+  // Update local attempts
+  setStudentAttempts(prev => {
+    const newAttempts = prev.currentAttempts + 1;
+    return {
+      ...prev,
+      currentAttempts: newAttempts,
+      attemptsLeft: Math.max(0, prev.maxAttempts - newAttempts)
     };
-    
-    setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
+  });
+  
+  // Add to alerts display
+  const newAlert = {
+    id: Date.now(),
+    message: alertData.message || 'Suspicious activity detected',
+    timestamp: new Date().toLocaleTimeString(),
+    type: alertData.type || 'warning',
+    severity: alertData.severity || 'medium',
+    detectionType: alertData.detectionType
+  };
+  
+  setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
+
 });
-    newSocket.on('chat-message', handleChatMessage);
-    newSocket.on('attempts-update', (data) => {
+  newSocket.on('chat-message', handleChatMessage);
+  newSocket.on('attempts-update', (data) => {
   console.log('📊 Received attempts update:', data);
   
   setStudentAttempts({
@@ -2202,6 +2610,66 @@ newSocket.on('force-exit-exam', (data) => {
   }, 2000);
 });
 
+// StudentQuizPage.jsx - UPDATE sa socket event listener:
+
+newSocket.on('send-current-time', (data) => {
+  console.log('🕒 Received current time from teacher:', data);
+  
+  // ✅ IGNORE TEACHER TIMER IF ASYNC EXAM
+  if (examType === 'asynchronous') {
+    console.log('🛑 Ignoring teacher timer for async exam - using local timer');
+    return; // STOP HERE! Don't update!
+  }
+  
+  // Only accept for live-class exams
+  let receivedTime = data.timeLeft;
+  
+  // Convert minutes to seconds if needed
+  if (receivedTime < 100 && receivedTime > 0) {
+    console.log('🔄 Converting minutes to seconds:', receivedTime);
+    receivedTime = receivedTime * 60;
+  }
+  
+  setTimeLeft(receivedTime);
+  setIsTimerRunning(data.isTimerRunning);
+  
+  // Save to localStorage
+  saveTimerToLocalStorage(receivedTime, data.isTimerRunning);
+  
+  console.log('✅ Student timer synced with teacher:', {
+    time: formatTime(receivedTime),
+    running: data.isTimerRunning
+  });
+});
+
+newSocket.on('exam-time-update', (data) => {
+  console.log('🕒 Student received timer update from teacher:', data);
+  // ✅ IGNORE IF ASYNC EXAM
+  if (examType === 'asynchronous') {
+    console.log('🛑 Ignoring teacher timer update for async exam');
+    return;
+  }
+
+  let receivedTime = data.timeLeft;
+  
+  // Convert minutes to seconds if needed
+  if (receivedTime < 100 && receivedTime > 0) {
+    console.log('🔄 Converting minutes to seconds:', receivedTime);
+    receivedTime = receivedTime * 60;
+  }
+  
+  setTimeLeft(receivedTime);
+  setIsTimerRunning(data.isTimerRunning);
+  
+  // Save to localStorage
+  saveTimerToLocalStorage(receivedTime, data.isTimerRunning);
+  
+  console.log('✅ Timer updated:', {
+    time: formatTime(receivedTime),
+    running: data.isTimerRunning
+  });
+});
+
     socketRef.current = newSocket;
 
     return () => {
@@ -2214,81 +2682,6 @@ newSocket.on('force-exit-exam', (data) => {
   }, [examId]);
 
 
-// ==================== STUDENT TIMER COUNTDOWN WITH PERSISTENCE ====================
-// I-update ang timer useEffect
-useEffect(() => {
-  if (timeLeft === null || !isTimerRunning) {
-    console.log('⏰ Student timer stopped:', { 
-      timeLeft, 
-      isTimerRunning,
-      examStarted,
-      examType // Add examType to logs
-    });
-    return;
-  }
-
-  console.log('⏰ Student timer STARTED:', {
-    initialTime: timeLeft,
-    formatted: formatTime(timeLeft),
-    examStarted,
-    permissionsGranted,
-    examType: examType // Log exam type
-  });
-
-  const timer = setInterval(() => {
-    setTimeLeft(prev => {
-      if (prev <= 1) {
-        clearInterval(timer);
-        console.log('⏰ Student time expired! Auto-submitting...');
-        clearTimerFromLocalStorage();
-        handleSubmitQuiz(true);
-        return 0;
-      }
-      
-      const newTime = prev - 1;
-      
-      // ✅ AUTO-SAVE TO LOCALSTORAGE EVERY 10 SECONDS
-      if (newTime % 10 === 0) {
-        saveTimerToLocalStorage(newTime, isTimerRunning);
-      }
-      
-      return newTime;
-    });
-  }, 1000);
-
-  return () => {
-    clearInterval(timer);
-    console.log('⏰ Student timer cleaned up');
-  };
-}, [timeLeft, isTimerRunning, handleSubmitQuiz, examStarted, examType]); // Add examType
-
-
-// ✅ AUTO-SAVE ON PAUSE/RESUME
-useEffect(() => {
-  if (timeLeft !== null) {
-    saveTimerToLocalStorage(timeLeft, isTimerRunning);
-    console.log('💾 Timer state saved:', {
-      time: timeLeft,
-      running: isTimerRunning
-    });
-  }
-}, [isTimerRunning, timeLeft]);
-
-// ✅ SAVE ON PAGE UNLOAD (WHEN STUDENT LEAVES)
-useEffect(() => {
-  const handleBeforeUnload = (e) => {
-    if (timeLeft !== null) {
-      saveTimerToLocalStorage(timeLeft, isTimerRunning);
-      console.log('💾 Timer saved before page unload');
-    }
-  };
-
-  window.addEventListener('beforeunload', handleBeforeUnload);
-  
-  return () => {
-    window.removeEventListener('beforeunload', handleBeforeUnload);
-  };
-}, [timeLeft, isTimerRunning]);
 
 // ✅ RECOVER TIMER ON RECONNECT
 useEffect(() => {
@@ -2308,17 +2701,7 @@ useEffect(() => {
   }
 }, [examStarted, examId]);
 
-// ==================== AUTO-START TIMER WHEN RECEIVED ====================
-useEffect(() => {
-  // Auto-start timer when we receive time from teacher
-  if (timeLeft !== null && timeLeft > 0 && examStarted) {
-    // Only start if we haven't already
-    if (!isTimerRunning) {
-      console.log('🎯 Auto-starting student timer:', formatTime(timeLeft));
-      setIsTimerRunning(true);
-    }
-  }
-}, [timeLeft, examStarted, isTimerRunning]);
+
 
   // ==================== WEBRTC HANDLERS ====================
   const handleCameraRequest = async (data, isRetry = false) => {
@@ -2470,113 +2853,84 @@ useEffect(() => {
   };
 
   // ==================== PROCTORING ALERTS HANDLER ====================
-  const handleProctoringAlert = useCallback((alertData) => {
-    console.log('🚨 Student received proctoring alert:', alertData);
-    
-    const isTeacherUpdateMessage = alertData.message && 
-        (alertData.message.includes('Teacher updated:') ||
-         alertData.message.includes('detection settings'));
-    
-    if (isTeacherUpdateMessage) {
-      console.log('📝 Teacher update message - NOT counting as attempt');
-      const newAlert = {
-        id: Date.now(),
-        message: alertData.message,
-        timestamp: new Date().toLocaleTimeString(),
-        type: 'info',
-        severity: 'low'
-      };
-      
-      setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
-      return;
-    }
-    
-    const isLikelyFalsePositive = alertData.message && (
-      alertData.message.includes('gaze_deviation') && 
-      !alertData.message.includes('sustained')
-    );
-    
-    if (isLikelyFalsePositive) {
-      console.log('🔍 Likely false positive - ignoring:', alertData.message);
-      return;
-    }
-    
-    const isAlertTypeEnabled = (detectionType) => {
-      const settingMap = {
-        'audio_detection': teacherDetectionSettings.audioDetection,
-        'suspicious_gesture': teacherDetectionSettings.handGestureDetection,
-        'tab_switching': teacherDetectionSettings.tabSwitchDetection,
-        'screenshot_attempt': teacherDetectionSettings.screenshotDetection,
-        'screenshot_tool_detected': teacherDetectionSettings.screenshotDetection,
-        'gaze_deviation': teacherDetectionSettings.gazeDetection,
-        'phone_usage': teacherDetectionSettings.phoneDetection,
-        'multiple_people': teacherDetectionSettings.multiplePeopleDetection,
-        'mouth_movement': teacherDetectionSettings.mouthDetection
-      };
-      
-      return settingMap[detectionType] !== false;
-    };
-    
-    const detectionType = alertData.detectionType;
-    if (detectionType && !isAlertTypeEnabled(detectionType)) {
-      console.log(`🛑 Alert type ${detectionType} disabled by teacher - ignoring`);
-      return;
-    }
-    
-      const shouldCountAsAttempt = detectionType && [
-        'multiple_people', 'audio_detection',
-        'tab_switching', 'suspicious_gesture', 'speaking_detected',
-        'no_face_detected',  // ✅ ADD THIS LINE
-        'low_attention_score' // ✅ ADD THIS LINE
-    ].includes(detectionType);
-    
-    if (shouldCountAsAttempt) {
-      setStudentAttempts(prev => {
-        const newAttempts = prev.currentAttempts + 1;
-        const attemptsLeft = Math.max(0, prev.maxAttempts - newAttempts);
-        
-        const updated = {
-          ...prev,
-          currentAttempts: newAttempts,
-          attemptsLeft: attemptsLeft,
-          history: [
-            ...prev.history,
-            {
-              timestamp: new Date().toISOString(),
-              violation: detectionType,
-              message: alertData.message,
-              attemptsLeft: attemptsLeft
-            }
-          ].slice(-10)
-        };
-        
-        if (attemptsLeft <= 3 && attemptsLeft > 0) {
-          alert(`⚠️ Warning: Only ${attemptsLeft} attempt(s) left!`);
-        }
-        
-        if (attemptsLeft <= 0) {
-          alert('❌ You have been disconnected due to excessive violations.');
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 3000);
-        }
-        
-        return updated;
-      });
-    }
-    
-    const newAlert = {
-      id: Date.now(),
-      message: alertData.message || 'Suspicious activity detected',
-      timestamp: new Date().toLocaleTimeString(),
-      type: alertData.type || 'warning',
-      severity: alertData.severity || 'medium',
-      detectionType: detectionType
-    };
-    
-    setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
-  }, [navigate, teacherDetectionSettings]);
+// In StudentQuizPage.jsx, update the handleProctoringAlert function:
 
+const handleProctoringAlert = useCallback((alertData) => {
+  console.log('🚨 Student detected proctoring alert:', alertData);
+  
+  // ✅ ENHANCE THE ALERT WITH STUDENT INFO
+  const enhancedAlert = {
+    ...alertData,
+    examId: examId,
+    studentSocketId: socketRef.current?.id,
+    studentId: 'student-user', // Replace with actual student ID
+    timestamp: new Date().toISOString(),
+    source: 'student_browser'
+  };
+  
+  // ✅ SEND TO SERVER WITH RETRY LOGIC
+  const sendAlert = (retryCount = 0) => {
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('proctoring-alert', enhancedAlert);
+      console.log('📤 Proctoring alert sent to server:', enhancedAlert);
+    } else if (retryCount < 3) {
+      console.log(`🔄 Socket not connected, retrying in 1s... (${retryCount + 1}/3)`);
+      setTimeout(() => sendAlert(retryCount + 1), 1000);
+    } else {
+      console.error('❌ Failed to send alert after 3 retries');
+      // Store locally for later sync
+      storeAlertLocally(enhancedAlert);
+    }
+  };
+  
+  sendAlert();
+  
+  // Also update local state
+  const newAlert = {
+    id: Date.now(),
+    message: alertData.message,
+    timestamp: new Date().toLocaleTimeString(),
+    type: alertData.type || 'warning',
+    severity: alertData.severity || 'medium',
+    detectionType: alertData.detectionType
+  };
+  
+  setProctoringAlerts(prev => [newAlert, ...prev.slice(0, 19)]);
+  
+}, [examId, navigate, teacherDetectionSettings]);
+
+// ✅ FUNCTION TO STORE ALERTS LOCALLY IF SERVER UNREACHABLE
+const storeAlertLocally = (alertData) => {
+  const pendingAlerts = JSON.parse(localStorage.getItem('pending-proctoring-alerts') || '[]');
+  pendingAlerts.push({
+    ...alertData,
+    storedAt: new Date().toISOString(),
+    examId: examId
+  });
+  localStorage.setItem('pending-proctoring-alerts', JSON.stringify(pendingAlerts));
+  
+  // Try to sync later
+  setTimeout(() => syncPendingAlerts(), 5000);
+};
+
+// ✅ SYNC PENDING ALERTS
+const syncPendingAlerts = () => {
+  if (!socketRef.current || !socketRef.current.connected) return;
+  
+  const pendingAlerts = JSON.parse(localStorage.getItem('pending-proctoring-alerts') || '[]');
+  const examAlerts = pendingAlerts.filter(alert => alert.examId === examId);
+  
+  if (examAlerts.length > 0) {
+    examAlerts.forEach(alert => {
+      socketRef.current.emit('proctoring-alert', alert);
+      console.log('📤 Syncing pending alert:', alert);
+    });
+    
+    // Remove sent alerts
+    const remainingAlerts = pendingAlerts.filter(alert => alert.examId !== examId);
+    localStorage.setItem('pending-proctoring-alerts', JSON.stringify(remainingAlerts));
+  }
+};
   // ==================== MICROPHONE STATE HANDLER ====================
   const handleMicrophoneStateChange = useCallback((isActive) => {
     setMicrophoneActive(isActive);
@@ -2666,20 +3020,36 @@ useEffect(() => {
     });
   };
 
-  // ==================== UTILITY FUNCTIONS ====================
-const formatTime = (seconds) => {
-  if (seconds === null || seconds === undefined) return '00:00';
-  
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  
-  if (hrs > 0) {
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  } else {
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+// StudentQuizPage.jsx - ADD useEffect to prevent disabling monitoring
+useEffect(() => {
+  if (examType === 'asynchronous' && examStarted) {
+    // Prevent disabling camera during async exams
+    const handleCameraDisableAttempt = () => {
+      if (requiresCamera && !cameraActive) {
+        alert('❌ Camera cannot be disabled during async exams!');
+        // Force re-enable camera
+        // You might need to add logic to reinitialize camera here
+      }
+    };
+
+    // Prevent disabling microphone during async exams
+    const handleMicDisableAttempt = () => {
+      if (requiresMicrophone && !microphoneActive) {
+        alert('❌ Microphone cannot be disabled during async exams!');
+        // Force re-enable microphone
+        // You might need to add logic to reinitialize microphone here
+      }
+    };
+
+    // Check periodically
+    const checkInterval = setInterval(() => {
+      handleCameraDisableAttempt();
+      handleMicDisableAttempt();
+    }, 5000);
+
+    return () => clearInterval(checkInterval);
   }
-};
+}, [examType, examStarted, requiresCamera, cameraActive, requiresMicrophone, microphoneActive]);
 
   // ==================== INITIALIZATION ====================
   useEffect(() => {
@@ -2702,6 +3072,7 @@ const formatTime = (seconds) => {
         examTitle={examTitle}
         className={className}
         teacherDetectionSettings={teacherDetectionSettings}
+        examType={examType} 
       />
     );
   }
@@ -2816,9 +3187,9 @@ const formatTime = (seconds) => {
         </div>
        <div className="header-right">
   {/* ✅ ATTEMPTS DISPLAY */}
-   <div className="exam-type-indicator">
-    {examType === 'asynchronous' ? '⏱️ Async Exam' : '🎥 Live Class'}
-  </div>
+  <div className="exam-type-indicator">
+  {examType === 'asynchronous' ? '⏱️ Async Exam' : '🎥 Live Class'}
+</div>
   <div className="attempts-display-student">
     <span className="attempts-text">
       Attempts: {studentAttempts.attemptsLeft}/{studentAttempts.maxAttempts}

@@ -6,11 +6,13 @@ import api, { startExamSession, endExamSession } from '../lib/api';
 import './TeacherExamSession.css';
 import TeacherProctoringControls from './TeacherProctoringControls';
 
+
 export default function TeacherExamSession() {
   const { examId } = useParams();
   const navigate = useNavigate();
   
   // State Management
+  const [showDetectionLog, setShowDetectionLog] = useState(false);
   const [exam, setExam] = useState(null);
   const [students, setStudents] = useState([]);
   const [timeLeft, setTimeLeft] = useState(10);
@@ -2044,6 +2046,83 @@ const renderStudentVideos = () => {
         </div>
         
         <div className="header-right">
+           {/* Add Detection Log button */}
+  <button 
+    className="detection-log-btn"
+    onClick={() => setShowDetectionLog(!showDetectionLog)}
+    title="View Detection Log"
+  >
+    📊 Detection Log
+    {Object.keys(proctoringAlerts).length > 0 && (
+      <span className="log-badge">
+        {Object.values(proctoringAlerts).flat().length}
+      </span>
+    )}
+  </button>
+  // 4. Render the Detection Log component
+{showDetectionLog && (
+  <div className="detection-log-modal">
+    <div className="detection-log-content">
+      <DetectionLog
+        proctoringAlerts={proctoringAlerts}
+        students={students}
+        studentAttempts={studentAttempts}
+        onClearAlerts={clearAllAlerts}
+        onDismissAlert={dismissStudentAlert}
+      />
+      <button 
+        className="close-log-btn"
+        onClick={() => setShowDetectionLog(false)}
+      >
+        ✕ Close
+      </button>
+    </div>
+  </div>
+)}
+.detection-log-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.detection-log-content {
+  background: #1a1a2e;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 1400px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.close-log-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  z-index: 1001;
+}
+
+
+
           {/* Global Alerts Button */}
   {Object.keys(proctoringAlerts).length > 0 && (
     <button 

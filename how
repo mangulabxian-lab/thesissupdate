@@ -1,0 +1,282 @@
+[33mcommit 0270119f7e46690ec85a3bd26ebd63d64f46eb93[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Wed Dec 3 19:15:00 2025 +0800
+
+    Update
+
+[33mcommit 4d2ef619c467d57e1fc42f94e959183d8456eeca[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Wed Dec 3 19:13:36 2025 +0800
+
+    first commit
+
+[33mcommit f53e3497058383333ea2e00a925b3d3fc128338f[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Wed Dec 3 19:12:08 2025 +0800
+
+    Scrub all secrets from Git history
+
+[33mcommit fb66b9a7f70eda0738197ecf566e52068ffffb55[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Wed Dec 3 16:09:45 2025 +0800
+
+    bago
+
+[33mcommit f1d61b916ab5a1ce2a2252750042a83bf3f5b593[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Wed Dec 3 15:37:04 2025 +0800
+
+    okay na camera
+
+[33mcommit 918f916bb59d745ae0050f43e40f00f0500edeac[m
+Merge: c41f2b17 d3a389fa
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Tue Dec 2 11:31:20 2025 +0800
+
+    di pa tapos
+
+[33mcommit c41f2b173457c24fc1fc65defc11b56925c149be[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Tue Dec 2 04:06:38 2025 +0800
+
+    backup
+
+[33mcommit d3a389fa269a52d7679f9781608255d658eec964[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Tue Dec 2 04:00:38 2025 +0800
+
+    update
+
+[33mcommit 6e591f2e465f92fde31be92de945b070121f2c1a[m
+Merge: ddb06437 228c5dcf
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Fri Nov 28 07:23:19 2025 +0800
+
+    Merge latest changes from main branchMerge branch 'main' of https://github.com/mangulabxian-lab/thesissupdate
+
+[33mcommit ddb06437afba342fbdcc11b8c4f457df786cec7c[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Fri Nov 28 07:22:20 2025 +0800
+
+    update
+
+[33mcommit 228c5dcf14c70783172aab67f4eec1dbb0670de1[m
+Merge: fb117446 eb66e0cb
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Fri Nov 28 07:18:40 2025 +0800
+
+    updated na proctoring
+
+[33mcommit fb1174461a0ae7776e9cc3e6d32f7574649c9336[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Fri Nov 28 07:12:06 2025 +0800
+
+    proctoring alerts update
+
+[33mcommit eb66e0cbdc95c0c135580a3dfd6cd90a16e495b7[m
+Merge: c35e81cb 219b966e
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Fri Nov 28 06:33:08 2025 +0800
+
+    Resolve merge conflict in index.js
+
+[33mcommit c35e81cb43af5ab1ea897b438e23b100b4bd758c[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Fri Nov 28 04:34:12 2025 +0800
+
+    update
+
+[33mcommit 219b966edff597f23c8d1cf10a738748c2b794b6[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Fri Nov 28 04:28:32 2025 +0800
+
+    okay na timer at chat
+
+[33mcommit ee35bc173b53e02d11c0d8c339196fabf020af52[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 27 21:16:22 2025 +0800
+
+    updated chat toggle button
+
+[33mcommit 370306489e949205b62833fe5225bbe58a0c88cc[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Thu Nov 27 17:01:39 2025 +0800
+
+    initial project upload
+
+[33mcommit eb4202988dec61f53f9374f12df59d54fade5cd9[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 27 10:50:29 2025 +0800
+
+    wala pa yung chat
+
+[33mcommit 12b83617014442ea93c3d6a696dae757244a226a[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Thu Nov 27 07:56:03 2025 +0800
+
+    initial commit
+
+[33mcommit 51a4872f2573e59daf27ecfa4c146c70c7ac5dbf[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 27 02:10:59 2025 +0800
+
+    dashboard okay na konti
+
+[33mcommit 2141d92c47a8b6d4297e15e8c3008e865ef1fdd7[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 27 01:23:49 2025 +0800
+
+    update
+
+[33mcommit 0b5afae4de04c4e96d9a737b64670b0a42982d8a[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 27 01:08:20 2025 +0800
+
+    update
+
+[33mcommit fd9008f7cd8c76f1056e4665ab97da937dc20691[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Tue Nov 25 22:37:57 2025 +0800
+
+    eto muna
+
+[33mcommit e6b4c904d2bc8718b8667fec898f38dd2a6cf3d7[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Tue Nov 25 16:41:10 2025 +0800
+
+    okay na
+
+[33mcommit 8f07491890c6965532502b7dd93cec575ba41501[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Tue Nov 25 06:33:51 2025 +0800
+
+    detection button control
+
+[33mcommit 3e599dab0c5228eeb352af002ad270b6ee189d92[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Mon Nov 24 07:17:53 2025 +0800
+
+    requirements
+
+[33mcommit 72c9a7ae9a3efb49c7ad5853fd303c643b19c518[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Mon Nov 24 07:12:41 2025 +0800
+
+    goods na camera niya
+
+[33mcommit 3ab41a1a440fad5331a56535152bf13469adec88[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Mon Nov 24 00:15:06 2025 +0800
+
+    update backend
+
+[33mcommit 47b195b79bac9d1fdafb91c4f5ce9b73277df038[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Mon Nov 24 00:08:10 2025 +0800
+
+    update project
+
+[33mcommit 3ffe119a58816ac50f946d56884571b45fec69a6[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Sun Nov 23 08:44:59 2025 +0800
+
+    video nalang kulang di pa siya connected
+
+[33mcommit 31cad36044323fd315ff69725a9224832640eb29[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Sat Nov 22 21:07:08 2025 +0800
+
+    updated backend and Frontend
+
+[33mcommit 6cc6150f86cfbd0dc4d97f0ebdd8f2d5c2fd0d21[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Fri Nov 21 22:30:08 2025 +0800
+
+    initial project upload
+
+[33mcommit 1f2739699615f85e7f914f49551b350683444165[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 20 07:44:46 2025 +0800
+
+    may camera na pero di pa maayos
+
+[33mcommit e4a217b73c65ca6a2068809f391ec1782574dd18[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Wed Nov 19 06:01:52 2025 +0800
+
+    GFORM
+
+[33mcommit e498e488bd9529cd02dd8543fee0768e6d5a63e7[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Tue Nov 18 09:31:26 2025 +0800
+
+    updated Frontend and backend files
+
+[33mcommit 472412e709dc7f4c5e6f4754593cd889f30fc5b3[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Sun Nov 16 00:05:56 2025 +0800
+
+    update Frontend and backend files
+
+[33mcommit 85f098c67e626ecacacd1c931d40dab11680c375[m
+Author: mangulabxian-lab <mangulabxian@gmail.com>
+Date:   Sat Nov 15 00:00:50 2025 +0800
+
+    initial commit
+
+[33mcommit 53b86521902871527501b650d343a1580650c6ab[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 6 16:56:09 2025 +0800
+
+    di pa tapos yung announcement
+
+[33mcommit 12d64773cd60157754782abad6c4cc78d22953d9[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 6 03:11:05 2025 +0800
+
+    Add .env to gitignore
+
+[33mcommit 9b651c43ba5c8a61ca4f50a45720101cb2a1e752[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 6 03:07:14 2025 +0800
+
+    Remove .env from repo
+
+[33mcommit 1fd41483b71582d52a5a29c0ffd3ee3ab8ddbdb6[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 6 02:58:43 2025 +0800
+
+    register/2AF/login/Dashboard
+
+[33mcommit fae787962c92d1032fd7cc919e9de4866b68470a[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Thu Nov 6 02:47:22 2025 +0800
+
+    okay na login and register tapos meron na ding dashboard
+
+[33mcommit 579f4e070bc251684eab253109074e628d46af1c[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Mon Nov 3 19:59:07 2025 +0800
+
+    meron ng parang gform
+
+[33mcommit 26fcadfab8ae42a987b65348181ef438485e26b7[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Mon Nov 3 15:51:31 2025 +0800
+
+     may gform at camera na
+
+[33mcommit 949746965381884a1e5ad4369c0ac42f610eb9ae[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Sun Nov 2 22:25:56 2025 +0800
+
+    pwede na yung student at teacher
+
+[33mcommit 27ce4d40090325da1bcf4673f29f739a2a13790a[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail>
+Date:   Sun Nov 2 19:59:47 2025 +0800
+
+    update meron ng camera
+
+[33mcommit ba92482710a9b44a29c431783a46ef3faaa965b1[m
+Author: imnotdore <galvan.jk.bsinfotech@gmail.com
